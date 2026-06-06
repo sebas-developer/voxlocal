@@ -46,7 +46,7 @@ class VoxLocal:
         """Download a specific model."""
         yield from self._download_manager.download(model_id)
 
-    def _ensure_stt(self):
+    def _ensure_stt(self) -> None:
         if self._stt is None:
             engine_name = self._stt_engine_name or self._stt_config["engine"]
             if not self._download_manager.is_downloaded(self._stt_config["model_id"]):
@@ -55,7 +55,7 @@ class VoxLocal:
 
             self._stt = resolve_stt_engine(engine_name, self.language)
 
-    def _ensure_tts(self):
+    def _ensure_tts(self) -> None:
         if self._tts is None:
             engine_name = self._tts_engine_name or self._tts_config["engine"]
             if not self._download_manager.is_downloaded(self._tts_config["model_id"]):
