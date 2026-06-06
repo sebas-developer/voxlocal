@@ -32,18 +32,19 @@ def extract_features(waveform: np.ndarray, cmvn_file: str) -> np.ndarray:
 
 
 def _load_cmvn(cmvn_file: str) -> np.ndarray:
-    lines = open(cmvn_file).readlines()
+    with open(cmvn_file) as f:
+        lines = f.readlines()
     ml, vl = [], []
     for i, line in enumerate(lines):
         p = line.split()
         if p[0] == "<AddShift>" and i + 1 < len(lines):
-            np_ = lines[i + 1].split()
-            if np_[0] == "<LearnRateCoef>":
-                ml = list(np_[3:-1])
+            parts = lines[i + 1].split()
+            if parts[0] == "<LearnRateCoef>":
+                ml = list(parts[3:-1])
         elif p[0] == "<Rescale>" and i + 1 < len(lines):
-            np_ = lines[i + 1].split()
-            if np_[0] == "<LearnRateCoef>":
-                vl = list(np_[3:-1])
+            parts = lines[i + 1].split()
+            if parts[0] == "<LearnRateCoef>":
+                vl = list(parts[3:-1])
     return np.array([np.array(ml, dtype=np.float64), np.array(vl, dtype=np.float64)])
 
 

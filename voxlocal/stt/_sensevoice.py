@@ -15,7 +15,7 @@ class SenseVoiceSTT:
         self._session = None
         self._embedding = None
         self._sp = None
-        self._frontend = None
+        self._model_dir = None
 
     def _ensure_model(self):
         if self._session is not None:
