@@ -9,9 +9,12 @@ class LanguageNotSupportedError(VoxLocalError):
 
 
 class ModelNotDownloadedError(VoxLocalError):
-    def __init__(self, model_id: str):
+    def __init__(self, model_id: str, message: str | None = None):
         self.model_id = model_id
-        self.message = f"Model not downloaded. Run v.setup() or v.download_model('{model_id}') first."
+        self.message = (
+            message
+            or f"Model not downloaded. Run v.setup() or v.download_model('{model_id}') first."
+        )
         super().__init__(self.message)
 
 
