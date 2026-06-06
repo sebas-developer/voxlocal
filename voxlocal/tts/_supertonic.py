@@ -25,7 +25,7 @@ class SupertonicTTS:
         self.language = language
         self._tts = None
 
-    def _ensure_model(self):
+    def _ensure_model(self) -> None:
         if self._tts is None:
             from supertonic import TTS
 
@@ -41,9 +41,11 @@ class SupertonicTTS:
         return AudioResult(numpy=data, sample_rate=sr)
 
     def speak_iter(
-        self, text: str, chunk_by: str = "sentence"
+        self,
+        text: str,
+        chunk_by: str = "sentence",  # valid: "sentence", "line", "paragraph"
     ) -> Iterator[AudioResult]:
         chunks = _split_text(text, chunk_by)
-        for i, chunk in enumerate(chunks):
+        for chunk in chunks:
             result = self.speak(chunk)
             yield result
