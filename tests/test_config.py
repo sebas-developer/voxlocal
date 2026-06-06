@@ -1,3 +1,5 @@
+import pytest
+
 from voxlocal._config import (
     MODEL_REGISTRY,
     get_stt_config,
@@ -32,3 +34,22 @@ def test_supported_languages():
     assert "es" in SUPPORTED_LANGUAGES
     assert "en" in SUPPORTED_LANGUAGES
     assert "auto" in SUPPORTED_LANGUAGES
+
+
+def test_get_stt_config_unsupported():
+    from voxlocal._errors import LanguageNotSupportedError
+
+    with pytest.raises(LanguageNotSupportedError):
+        get_stt_config("xx")
+
+
+def test_get_tts_config():
+    config = get_tts_config("es")
+    assert config["engine"] == "supertonic"
+
+
+def test_get_tts_config_unsupported():
+    from voxlocal._errors import LanguageNotSupportedError
+
+    with pytest.raises(LanguageNotSupportedError):
+        get_tts_config("xx")

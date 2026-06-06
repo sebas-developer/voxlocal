@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-MODEL_REGISTRY: dict = {
+MODEL_REGISTRY: dict[str, dict[str, dict[str, str | int]]] = {
     "stt": {
         "es": {"engine": "moonshine", "model_id": "moonshine_es", "size_mb": 60},
         "en": {"engine": "sensevoice", "model_id": "sensevoice_en", "size_mb": 230},
