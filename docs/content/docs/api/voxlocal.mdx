@@ -1,0 +1,312 @@
+---
+title: VoxLocal
+description: Main API reference for the VoxLocal class
+---
+
+The `VoxLocal` class is the primary interface for STT and TTS operations.
+
+## Constructor
+
+```python
+VoxLocal(
+    language: str,
+    stt_engine: str | None = None,
+    tts_engine: str | None = None,
+    *,
+    cache_dir: str | Path | None = None,
+)
+```
+
+### Parameters
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `language` | `str` | *required* | Language code (e.g., "en", "es", "ja") |
+| `stt_engine` | `str \| None` | `None` | Override STT engine (default: auto) |
+| `tts_engine` | `str \| None` | `None` | Override TTS engine (default: auto) |
+| `cache_dir` | `str \| Path \| None` | `None` | Custom model cache directory |
+
+### Raises
+
+- `LanguageNotSupportedError` — If the language is not supported
+
+### Example
+
+```python
+from voxlocal import VoxLocal
+
+# Basic usage
+vl = VoxLocal("en")
+
+# With engine override
+vl = VoxLocal("en", stt_engine="whisper")
+
+# With custom cache directory
+vl = VoxLocal("en", cache_dir="/tmp/models")
+```
+
+## Methods
+
+### `setup()`
+
+Eagerly download models and optionally warm up TTS.
+
+```python
+def setup(
+    *,
+    stt: bool = True,
+    tts: bool = True,
+    warmup_tts: bool = True,
+) -> list[DownloadProgress]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `stt` | `bool` | `True` | Download STT models |
+| `tts` | `bool` | `True` | Download TTS models |
+| `warmup_tts` | `bool` | `True` | Warm up TTS engine after download |
+
+**Returns:** List of `DownloadProgress` objects
+
+**Example:**
+
+```python
+progress = vl.setup()
+for p in progress:
+    print(f"{p.model_id}: {p.description}")
+
+# Setup only TTS
+vl.setup(stt=False)
+
+# Setup without warmup
+vl.setup(warmup_tts=False)
+```
+
+### `setup_iter()`
+
+Yield model setup progress while performing setup.
+
+```python
+def setup_iter(
+    *,
+    stt: bool = True,
+    tts: bool = True,
+    warmup_tts: bool = True,
+) -> Iterator[DownloadProgress]
+```
+
+Same as `setup()` but returns an iterator for streaming progress.
+
+### `download_model()`
+
+Download a specific model by ID.
+
+```python
+def download_model(model_id: str) -> list[DownloadProgress]
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `model_id` | `str` | Model identifier (e.g., "supertonic_3") |
+
+**Example:**
+
+```python
+vl.download_model("supertonic_3")
+vl.download_model("sensevoice_onnx")
+```
+
+### `transcribe()`
+
+Transcribe an audio file to text.
+
+```python
+def transcribe(audio_path: str | Path) -> str
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `audio_path` | `str \| Path` | Path to WAV audio file |
+
+**Returns:** Transcribed text
+
+**Raises:**
+- `ModelNotDownloadedError` — If STT model isn't downloaded
+- `LanguageNotSupportedError` — If language doesn't support STT
+- `TranscriptionError` — If transcription fails
+
+**Example:**
+
+```python
+text = vl.transcribe("recording.wav")
+print(text)
+```
+
+### `speak()`
+
+Synthesize text to a complete audio result.
+
+```python
+def speak(text: str) -> AudioResult
+```
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `text` | `str` | Text to synthesize |
+
+**Returns:** `AudioResult` with complete audio
+
+**Raises:**
+- `ModelNotDownloadedError` — If TTS model isn't downloaded
+- `SynthesisError` — If synthesis fails
+
+**Example:**
+
+```python
+audio = vl.speak("Hello, world!")
+audio.save("hello.wav")
+```
+
+### `speak_iter()`
+
+Yield raw engine results as each text chunk is generated.
+
+```python
+def speak_iter(
+    text: str,
+    chunk_by: str = "progressive",
+) -> Iterator[AudioResult]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | `str` | *required* | Text to synthesize |
+| `chunk_by` | `str` | `"progressive"` | Chunking strategy |
+
+**Example:**
+
+```python
+for result in vl.speak_iter("Long text here..."):
+    process_audio(result.numpy, result.sample_rate)
+```
+
+### `stream()`
+
+Yield portable, trimmed and crossfaded PCM-ready blocks.
+
+```python
+def stream(
+    text: str,
+    *,
+    chunk_by: str = "progressive",
+    prefetch: int = DEFAULT_PREFETCH,
+) -> Iterator[AudioChunk]
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | `str` | *required* | Text to synthesize |
+| `chunk_by` | `str` | `"progressive"` | Chunking strategy |
+| `prefetch` | `int` | `2` | Number of chunks to prefetch |
+
+**Example:**
+
+```python
+for chunk in vl.stream("Hello!"):
+    play_chunk(chunk.numpy, chunk.sample_rate)
+    if chunk.final:
+        print("Done!")
+```
+
+### `play()`
+
+Convenience method to play audio through speakers.
+
+```python
+def play(
+    text: str,
+    *,
+    on_event: Callable[[PlaybackEvent], None] | None = None,
+    device: int | str | None = None,
+    prefetch: int = DEFAULT_PREFETCH,
+) -> None
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `text` | `str` | *required* | Text to speak |
+| `on_event` | `Callable \| None` | `None` | Progress callback |
+| `device` | `int \| str \| None` | `None` | Audio device ID/name |
+| `prefetch` | `int` | `2` | Prefetch buffer size |
+
+**Example:**
+
+```python
+vl.play("Hello, world!")
+
+# With progress callback
+vl.play("Hello!", on_event=lambda e: print(f"Chunk {e.sequence}"))
+```
+
+## Attributes
+
+### `language`
+
+The language code for this instance.
+
+```python
+vl = VoxLocal("en")
+print(vl.language)  # "en"
+```
+
+## Constants
+
+### `SUPPORTED_LANGUAGES`
+
+All languages with at least one engine:
+
+```python
+from voxlocal import SUPPORTED_LANGUAGES
+print(SUPPORTED_LANGUAGES)  # ['auto', 'de', 'en', 'es', 'fr', 'ja', 'ko', 'pt']
+```
+
+### `SUPPORTED_STT_LANGUAGES`
+
+Languages with STT support:
+
+```python
+from voxlocal import SUPPORTED_STT_LANGUAGES
+print(SUPPORTED_STT_LANGUAGES)  # ('auto', 'de', 'en', 'es', 'fr', 'ja', 'ko', 'pt')
+```
+
+### `SUPPORTED_TTS_LANGUAGES`
+
+Languages with TTS support:
+
+```python
+from voxlocal import SUPPORTED_TTS_LANGUAGES
+print(SUPPORTED_TTS_LANGUAGES)  # ('de', 'en', 'es', 'fr', 'ja', 'ko', 'pt')
+```
+
+### `__version__`
+
+Current version string:
+
+```python
+from voxlocal import __version__
+print(__version__)  # "0.1.0"
+```

@@ -1,0 +1,170 @@
+---
+title: Streaming
+description: How VoxLocal streams audio with prefetching and crossfading
+---
+
+VoxLocal's streaming pipeline generates audio progressively, yielding small chunks as they're ready instead of waiting for the entire synthesis to complete.
+
+## Why Streaming?
+
+For long text inputs, waiting for complete synthesis is slow. Streaming provides:
+
+- **Lower latency**: First audio chunk plays within milliseconds
+- **Smooth playback**: Crossfading eliminates gaps between chunks
+- **Memory efficiency**: Only one chunk is in memory at a time
+- **Progressive delivery**: Send audio over network as it's generated
+
+## Pipeline Architecture
+
+```
+Text Input
+    │
+    ▼
+┌──────────────┐
+│  TTS Engine  │  Generates raw AudioResult chunks
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│   Prefetch   │  Background thread generates upcoming chunks
+└──────┬───────┘
+       │
+       ▼
+┌──────────────┐
+│  Assembler   │  Trims silence, crossfades boundaries
+└──────┬───────┘
+       │
+       ▼
+  AudioChunk stream
+```
+
+## Key Concepts
+
+### AudioResult vs AudioChunk
+
+| Type | Description | When Used |
+|------|-------------|-----------|
+| `AudioResult` | Raw synthesis output from the engine | Internal pipeline |
+| `AudioChunk` | Processed, portable block ready for playback | Public API |
+
+### Prefetch
+
+A background thread generates upcoming chunks while the current one is being processed:
+
+```python
+from voxlocal._stream import prefetch_results
+
+# Default prefetch is 2 chunks ahead
+for result in prefetch_results(some_results, maxsize=2):
+    process(result)
+```
+
+The prefetch buffer size controls the trade-off between:
+- **Higher prefetch**: More latency, smoother playback
+- **Lower prefetch**: Less latency, potential pauses
+
+### Crossfading
+
+When two chunks meet at a boundary, VoxLocal applies a crossfade to prevent clicks:
+
+```
+Chunk N:     ████████████████░░░░░░
+                          ──────> fade out
+Chunk N+1:               ░░░░░░████████████████
+                    <────── fade in
+```
+
+The crossfade region is 80ms by default (`CROSSFADE_SECONDS = 0.08`).
+
+### Silence Trimming
+
+Generated audio often has silence at the start and end. VoxLocal trims this while preserving natural pauses:
+
+```python
+from voxlocal._stream import trim_boundary_silence
+
+# Trim silence from audio
+trimmed = trim_boundary_silence(
+    audio,
+    sample_rate=22050,
+    trim_start=True,  # Trim leading silence (except for first chunk)
+    trim_end=True,     # Always trim trailing silence
+)
+```
+
+The `BOUNDARY_PADDING_SECONDS = 0.06` setting keeps a small natural pause at boundaries.
+
+## Streaming API
+
+### `vl.stream()`
+
+The main streaming method:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Stream audio chunks
+for chunk in vl.stream("Hello, this is streamed audio."):
+    print(f"Chunk {chunk.sequence}: {chunk.duration_seconds:.3f}s")
+    # chunk.numpy -> float32 array
+    # chunk.pcm_s16le -> raw PCM bytes
+    # chunk.sample_rate -> sample rate
+    # chunk.final -> True for the last chunk
+```
+
+### `vl.speak_iter()`
+
+Lower-level iteration over raw engine results:
+
+```python
+for result in vl.speak_iter("Hello!"):
+    # result is an AudioResult (raw engine output)
+    print(f"Got {result.duration_seconds:.2f}s of audio")
+```
+
+### Controlling Chunk Size
+
+The `chunk_by` parameter controls how text is split:
+
+```python
+# Default: progressive (splits at natural boundaries)
+for chunk in vl.stream("Long text...", chunk_by="progressive"):
+    process(chunk)
+```
+
+## Advanced: StreamAssembler
+
+The `StreamAssembler` is the core component that converts raw results into gapless blocks:
+
+```python
+from voxlocal._stream import StreamAssembler
+
+assembler = StreamAssembler(
+    sample_rate=22050,
+    overlap=1764,  # 80ms at 22050 Hz
+)
+
+# Push chunks through the assembler
+chunk1 = assembler.push(0, audio1)  # First chunk
+chunk2 = assembler.push(1, audio2)  # Crossfaded with previous
+chunk3 = assembler.finish()         # Flush remaining tail
+```
+
+## Performance Characteristics
+
+| Metric | Value |
+|--------|-------|
+| Crossfade duration | 80ms |
+| Boundary padding | 60ms |
+| Silence threshold | 0.002 |
+| Default prefetch | 2 chunks |
+| Thread name | `voxlocal-stream-producer` |
+
+## Next Steps
+
+- [Audio](/docs/concepts/audio) — Understanding audio formats
+- [Streaming Guide](/docs/guides/streaming) — Hands-on streaming tutorial
+- [API: stream()](/docs/api/voxlocal#stream) — Full API reference

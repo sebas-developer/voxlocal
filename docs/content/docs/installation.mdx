@@ -1,0 +1,148 @@
+---
+title: Installation
+description: Install VoxLocal and its dependencies
+---
+
+## Requirements
+
+- Python 3.10 or later
+- pip or another Python package manager
+- (Optional) ffmpeg for audio format support
+
+## Basic Installation
+
+```bash
+pip install voxlocal
+```
+
+This installs the core library with minimal dependencies.
+
+## Optional Dependencies
+
+VoxLocal uses optional dependencies for different features. Install only what you need:
+
+### For TTS (Text-to-Speech)
+
+```bash
+pip install 'voxlocal[tts]'
+```
+
+Installs the Supertonic TTS engine.
+
+### For STT (Speech-to-Text)
+
+Choose one or more engines based on your language needs:
+
+```bash
+# Whisper (French, German, Portuguese)
+pip install 'voxlocal[whisper]'
+
+# SenseVoice (English, Japanese, Korean)
+pip install 'voxlocal[sensevoice]'
+
+# Moonshine (Spanish)
+pip install 'voxlocal[moonshine]'
+```
+
+### For Playback
+
+```bash
+pip install 'voxlocal[playback]'
+```
+
+Installs sounddevice for audio output.
+
+### For the HTTP Server
+
+```bash
+pip install 'voxlocal[server]'
+```
+
+Installs FastAPI and Uvicorn.
+
+### Install Everything
+
+```bash
+pip install 'voxlocal[tts,whisper,sensevoice,moonshine,playback,server]'
+```
+
+## Verify Installation
+
+```python
+from voxlocal import VoxLocal, SUPPORTED_LANGUAGES
+
+print("VoxLocal installed successfully!")
+print(f"Supported languages: {SUPPORTED_LANGUAGES}")
+```
+
+## Model Downloads
+
+Models are downloaded automatically on first use and cached locally. You can also download them manually:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+
+# Download all models for English
+vl.setup()
+
+# Or download a specific model
+vl.download_model("supertonic_3")
+vl.download_model("sensevoice_onnx")
+```
+
+### Cache Location
+
+By default, models are cached in:
+- **macOS**: `~/Library/Caches/voxlocal`
+- **Linux**: `~/.cache/voxlocal`
+- **Windows**: `C:\Users\<user>\AppData\Local\voxlocal\Cache`
+
+Override with a custom path:
+
+```python
+vl = VoxLocal("en", cache_dir="/path/to/models")
+```
+
+## System Dependencies
+
+Some engines require system-level dependencies:
+
+### Whisper
+- PyTorch (installed automatically)
+- A CUDA-capable GPU is recommended but not required
+
+### SenseVoice
+- ONNX Runtime
+- HuggingFace Hub (for model download)
+
+### Moonshine
+- ONNX Runtime
+
+### Sounddevice (playback)
+- PortAudio (usually pre-installed on macOS)
+- On Linux: `sudo apt-get install libportaudio2`
+
+## Troubleshooting
+
+### "Missing optional dependency" Error
+
+This means you haven't installed the required extras. Check the error message — it will tell you exactly which extra to install:
+
+```bash
+pip install 'voxlocal[<extra>]'
+```
+
+### Model Download Fails
+
+Check your internet connection. Models are downloaded from HuggingFace Hub and other registries. If you're behind a proxy, configure your network settings accordingly.
+
+### No Audio Output
+
+Ensure sounddevice is installed and your audio device is configured:
+
+```bash
+pip install 'voxlocal[playback]'
+python -c "import sounddevice; print(sounddevice.query_devices())"
+```

@@ -1,0 +1,154 @@
+---
+title: Engines
+description: Understanding STT and TTS engines in VoxLocal
+---
+
+VoxLocal uses a pluggable engine architecture. Each engine specializes in a specific task (STT or TTS) and language.
+
+## Engine Types
+
+### STT Engines
+
+| Engine | Languages | Model Size | Speed | Quality |
+|--------|-----------|------------|-------|---------|
+| **Whisper** | fr, de, pt, auto | 139 MB | Medium | High |
+| **Moonshine** | es | 60 MB | Fast | Good |
+| **SenseVoice** | en, ja, ko | 230 MB | Fast | High |
+
+### TTS Engines
+
+| Engine | Languages | Model Size | Speed | Quality |
+|--------|-----------|------------|-------|---------|
+| **Supertonic** | all | 99 MB | Fast | High |
+
+## How Engine Selection Works
+
+When you create a `VoxLocal` instance, it resolves the best engine for your language:
+
+```python
+from voxlocal import VoxLocal
+
+# Auto-selects SenseVoice for English STT, Supertonic for TTS
+vl = VoxLocal("en")
+
+# Auto-selects Moonshine for Spanish STT
+vl = VoxLocal("es")
+```
+
+### Default Engine Mapping
+
+The default engine for each language is defined in the model registry:
+
+```python
+from voxlocal._config import MODEL_REGISTRY
+
+# STT defaults
+MODEL_REGISTRY["stt"]["en"]  # -> EngineConfig(engine="sensevoice", ...)
+MODEL_REGISTRY["stt"]["es"]  # -> EngineConfig(engine="moonshine", ...)
+MODEL_REGISTRY["stt"]["fr"]  # -> EngineConfig(engine="whisper", ...)
+
+# TTS defaults (all use Supertonic)
+MODEL_REGISTRY["tts"]["en"]  # -> EngineConfig(engine="supertonic", ...)
+```
+
+## Overriding the Default Engine
+
+You can force a specific engine:
+
+```python
+from voxlocal import VoxLocal
+
+# Force Whisper for English (instead of default SenseVoice)
+vl = VoxLocal("en", stt_engine="whisper")
+```
+
+If the engine doesn't support the language, VoxLocal raises `EngineNotSupportedError`:
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import EngineNotSupportedError
+
+try:
+    # Moonshine only supports Spanish
+    vl = VoxLocal("en", stt_engine="moonshine")
+except EngineNotSupportedError as e:
+    print(e)
+    # "STT engine 'moonshine' does not support language 'en'"
+```
+
+## Engine Details
+
+### Whisper
+
+OpenAI's Whisper model, running locally via the `openai-whisper` package.
+
+- **Strengths**: High accuracy, supports many languages
+- **Weaknesses**: Larger model, slower on CPU
+- **Best for**: French, German, Portuguese
+
+```python
+vl = VoxLocal("fr", stt_engine="whisper")
+vl.setup()
+text = vl.transcribe("french_audio.wav")
+```
+
+### Moonshine
+
+A lightweight, fast STT engine optimized for Spanish.
+
+- **Strengths**: Small model (60 MB), fast inference
+- **Weaknesses**: Spanish only
+- **Best for**: Real-time Spanish transcription
+
+```python
+vl = VoxLocal("es", stt_engine="moonshine")
+vl.setup()
+text = vl.transcribe("spanish_audio.wav")
+```
+
+### SenseVoice
+
+ONNX-based STT from HuggingFace, optimized for Asian languages.
+
+- **Strengths**: Fast, good for CJK languages
+- **Weaknesses**: Limited language support
+- **Best for**: English, Japanese, Korean
+
+```python
+vl = VoxLocal("ja", stt_engine="sensevoice")
+vl.setup()
+text = vl.transcribe("japanese_audio.wav")
+```
+
+### Supertonic
+
+VoxLocal's default TTS engine, supporting all languages.
+
+- **Strengths**: Fast, consistent quality across languages
+- **Weaknesses**: Single engine for all languages
+- **Best for**: All TTS use cases
+
+```python
+vl = VoxLocal("ko")
+vl.setup()
+audio = vl.speak("안녕하세요!")
+```
+
+## Engine Configuration Dataclass
+
+Each engine is described by an `EngineConfig`:
+
+```python
+@dataclass(frozen=True)
+class EngineConfig:
+    engine: str       # e.g., "whisper", "supertonic"
+    model_id: str     # e.g., "whisper_base", "supertonic_3"
+    size_mb: int      # Download size in megabytes
+```
+
+## Next Steps
+
+- [Streaming](/docs/concepts/streaming) — How audio chunks flow through the pipeline
+- [Audio](/docs/concepts/audio) — Understanding audio formats and processing
+- [STT Guide](/docs/guides/stt) — Hands-on STT tutorial
+- [TTS Guide](/docs/guides/tts) — Hands-on TTS tutorial

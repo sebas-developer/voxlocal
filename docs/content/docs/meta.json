@@ -1,0 +1,29 @@
+{
+  "title": "Documentation",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "installation",
+    "quickstart",
+    "---Concepts---",
+    "concepts/engines",
+    "concepts/streaming",
+    "concepts/audio",
+    "---Guides---",
+    "guides/stt",
+    "guides/tts",
+    "guides/streaming",
+    "guides/playback",
+    "guides/custom-engine",
+    "---API Reference---",
+    "api/voxlocal",
+    "api/server",
+    "api/errors",
+    "api/types",
+    "---Examples---",
+    "examples/basic-usage",
+    "examples/batch-transcribe",
+    "examples/real-time-tts",
+    "examples/fastapi-server"
+  ]
+}

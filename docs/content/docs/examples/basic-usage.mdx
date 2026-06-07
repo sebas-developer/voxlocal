@@ -1,0 +1,227 @@
+---
+title: Basic Usage
+description: Simple examples of VoxLocal's core features
+---
+
+This page contains simple, copy-paste examples for common VoxLocal operations.
+
+## Example 1: Text-to-Speech
+
+Generate audio from text:
+
+```python
+from voxlocal import VoxLocal
+
+# Initialize
+vl = VoxLocal("en")
+vl.setup()
+
+# Generate audio
+audio = vl.speak("Hello! Welcome to VoxLocal.")
+
+# Save to file
+audio.save("welcome.wav")
+
+# Print duration
+print(f"Audio duration: {audio.duration_seconds:.2f}s")
+```
+
+## Example 2: Speech-to-Text
+
+Transcribe an audio file:
+
+```python
+from voxlocal import VoxLocal
+
+# Initialize
+vl = VoxLocal("en")
+vl.setup()
+
+# Transcribe
+text = vl.transcribe("recording.wav")
+print(f"Transcribed: {text}")
+```
+
+## Example 3: Simple Streaming
+
+Stream audio in real-time:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Stream chunks
+for chunk in vl.stream("This text streams in real-time!"):
+    print(f"Chunk {chunk.sequence}: {chunk.duration_seconds:.3f}s")
+
+    # Play or process the chunk
+    # play_audio(chunk.numpy, chunk.sample_rate)
+```
+
+## Example 4: Multi-Language
+
+Use different languages:
+
+```python
+from voxlocal import VoxLocal
+
+# English
+vl_en = VoxLocal("en")
+vl_en.setup()
+audio_en = vl_en.speak("Hello!")
+
+# Spanish
+vl_es = VoxLocal("es")
+vl_es.setup()
+audio_es = vl_es.speak("Hola!")
+
+# Save both
+audio_en.save("hello_en.wav")
+audio_es.save("hello_es.wav")
+```
+
+## Example 5: Batch Processing
+
+Process multiple files:
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Process all WAV files in a directory
+audio_dir = Path("recordings")
+for wav_file in audio_dir.glob("*.wav"):
+    print(f"Transcribing {wav_file.name}...")
+    text = vl.transcribe(wav_file)
+    print(f"  Result: {text}")
+```
+
+## Example 6: With Error Handling
+
+Robust error handling:
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import (
+    VoxLocalError,
+    LanguageNotSupportedError,
+    ModelNotDownloadedError,
+    DependencyMissingError,
+)
+
+def safe_transcribe(audio_path: str, language: str = "en") -> str | None:
+    try:
+        vl = VoxLocal(language)
+        vl.setup()
+        return vl.transcribe(audio_path)
+    except LanguageNotSupportedError:
+        print(f"Language '{language}' not supported")
+        return None
+    except ModelNotDownloadedError:
+        print("Model download failed")
+        return None
+    except DependencyMissingError as e:
+        print(f"Install: pip install 'voxlocal[{e.extra}]'")
+        return None
+    except VoxLocalError as e:
+        print(f"Error: {e}")
+        return None
+
+# Usage
+text = safe_transcribe("audio.wav", "en")
+```
+
+## Example 7: Audio Info
+
+Get detailed audio information:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio = vl.speak("Hello!")
+
+# Get audio info
+print(f"Duration: {audio.duration_seconds:.2f}s")
+print(f"Sample rate: {audio.sample_rate} Hz")
+print(f"Samples: {len(audio.numpy)}")
+print(f"WAV size: {len(audio.bytes)} bytes")
+print(f"PCM size: {len(audio.pcm_s16le)} bytes")
+```
+
+## Example 8: Custom Cache Directory
+
+Use a custom cache location:
+
+```python
+from voxlocal import VoxLocal
+from pathlib import Path
+
+# Custom cache directory
+cache_dir = Path.home() / "my_voxlocal_cache"
+vl = VoxLocal("en", cache_dir=cache_dir)
+vl.setup()
+
+# Models are now cached in ~/my_voxlocal_cache/
+```
+
+## Example 9: Progress Tracking
+
+Track download and setup progress:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+
+# Track progress
+for progress in vl.setup_iter():
+    print(f"[{progress.percent}%] {progress.description}")
+
+print("Setup complete!")
+```
+
+## Example 10: Simple TTS Script
+
+A complete TTS script:
+
+```python
+#!/usr/bin/env python3
+"""Simple TTS script using VoxLocal."""
+
+from voxlocal import VoxLocal
+
+def main():
+    # Initialize
+    print("Initializing VoxLocal...")
+    vl = VoxLocal("en")
+    vl.setup()
+
+    # Generate audio
+    text = "This is a test of the VoxLocal text to speech system."
+    print(f"Generating audio for: {text}")
+
+    audio = vl.speak(text)
+
+    # Save
+    output_file = "output.wav"
+    audio.save(output_file)
+
+    print(f"Saved {audio.duration_seconds:.2f}s of audio to {output_file}")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Next Steps
+
+- [Batch Transcribe](/docs/examples/batch-transcribe) — Advanced batch processing
+- [Real-time TTS](/docs/examples/real-time-tts) — Real-time streaming example
+- [FastAPI Server](/docs/examples/fastapi-server) — HTTP API example

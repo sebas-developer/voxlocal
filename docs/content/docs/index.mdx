@@ -1,0 +1,85 @@
+---
+title: Getting Started
+description: VoxLocal - Local STT & TTS with streaming support
+---
+
+VoxLocal is a Python library for **local speech-to-text (STT)** and **text-to-speech (TTS)** with streaming support. It runs entirely on your machine — no cloud APIs, no data leaving your device.
+
+## What is VoxLocal?
+
+VoxLocal provides a unified interface for multiple STT and TTS engines:
+
+- **Speech-to-Text (STT)**: Transcribe audio files using Whisper, Moonshine, or SenseVoice engines
+- **Text-to-Speech (TTS)**: Generate natural-sounding speech using the Supertonic engine
+- **Streaming**: Progressive audio generation with crossfading for smooth playback
+- **HTTP API**: Optional FastAPI server for remote access
+
+## Key Features
+
+| Feature | Description |
+|---------|-------------|
+| **Multi-engine STT** | Whisper, Moonshine (Spanish), SenseVoice (EN/JA/KO) |
+| **Local TTS** | Supertonic engine for all supported languages |
+| **Streaming** | Progressive chunk generation with prefetch |
+| **Crossfading** | Smooth audio transitions between chunks |
+| **Playback** | Built-in audio device output |
+| **HTTP Server** | Optional REST API with FastAPI |
+| **Model caching** | Automatic download and cache management |
+
+## Supported Languages
+
+| Language | STT Engine | TTS Engine |
+|----------|------------|------------|
+| English (en) | SenseVoice | Supertonic |
+| Spanish (es) | Moonshine | Supertonic |
+| Japanese (ja) | SenseVoice | Supertonic |
+| Korean (ko) | SenseVoice | Supertonic |
+| French (fr) | Whisper | Supertonic |
+| German (de) | Whisper | Supertonic |
+| Portuguese (pt) | Whisper | Supertonic |
+
+## Architecture Overview
+
+```
+┌─────────────────────────────────────────┐
+│              VoxLocal                    │
+├──────────────┬──────────────────────────┤
+│     STT      │          TTS             │
+├──────────────┼──────────────────────────┤
+│  Whisper     │     Supertonic           │
+│  Moonshine   │                          │
+│  SenseVoice  │                          │
+├──────────────┴──────────────────────────┤
+│         Streaming Pipeline              │
+│    (Prefetch + Crossfade + Trim)        │
+├─────────────────────────────────────────┤
+│         Optional HTTP Server            │
+│            (FastAPI)                    │
+└─────────────────────────────────────────┘
+```
+
+## Quick Example
+
+```python
+from voxlocal import VoxLocal
+
+# Initialize with a language
+vl = VoxLocal("en")
+
+# Download models (first run)
+vl.setup()
+
+# Text-to-Speech
+audio = vl.speak("Hello, world!")
+audio.save("hello.wav")
+
+# Speech-to-Text
+text = vl.transcribe("hello.wav")
+print(text)  # "Hello, world!"
+```
+
+## Next Steps
+
+- [Installation](/docs/installation) — Install VoxLocal and dependencies
+- [Quickstart](/docs/quickstart) — Get up and running in 5 minutes
+- [Concepts](/docs/concepts/engines) — Understand the engine architecture

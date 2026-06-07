@@ -1,0 +1,329 @@
+---
+title: FastAPI Server
+description: Deploy VoxLocal as an HTTP API with FastAPI
+---
+
+This example shows how to deploy VoxLocal as a REST API using FastAPI.
+
+## Quick Start
+
+### 1. Install Dependencies
+
+```bash
+pip install 'voxlocal[server]'
+```
+
+### 2. Run the Server
+
+```bash
+python -m voxlocal.server
+```
+
+The server starts at `http://127.0.0.1:8765`.
+
+### 3. Test the API
+
+```bash
+# Health check
+curl http://localhost:8765/v1/health
+
+# Text-to-Speech
+curl -X POST http://localhost:8765/v1/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello!", "language": "en"}' \
+  --output hello.wav
+
+# Speech-to-Text
+curl -X POST "http://localhost:8765/v1/stt?language=en" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @hello.wav
+```
+
+## Custom Server Configuration
+
+### Custom Port and Host
+
+```bash
+python -m voxlocal.server --host 0.0.0.0 --port 9000
+```
+
+### With CORS Support
+
+```bash
+python -m voxlocal.server \
+  --cors-origin http://localhost:3000 \
+  --cors-origin https://myapp.com
+```
+
+### With Custom Cache Directory
+
+```bash
+python -m voxlocal.server --cache-dir /path/to/models
+```
+
+## Programmatic Server
+
+```python
+from voxlocal.server import create_app
+import uvicorn
+
+# Create app with custom settings
+app = create_app(
+    cache_dir="/path/to/models",
+    cors_origins=("http://localhost:3000",),
+)
+
+# Run
+uvicorn.run(app, host="0.0.0.0", port=9000)
+```
+
+## API Endpoints
+
+### `GET /v1/health`
+
+Health check endpoint.
+
+**Response:**
+```json
+{"status": "ok"}
+```
+
+### `POST /v1/tts`
+
+Synthesize text to WAV audio.
+
+**Request:**
+```json
+{
+  "text": "Hello, world!",
+  "language": "en"
+}
+```
+
+**Response:** WAV audio bytes
+
+**Example (Python):**
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8765/v1/tts",
+    json={"text": "Hello!", "language": "en"},
+)
+
+with open("hello.wav", "wb") as f:
+    f.write(response.content)
+```
+
+### `POST /v1/tts/stream`
+
+Stream TTS as NDJSON chunks.
+
+**Request:**
+```json
+{
+  "text": "This streams in real-time.",
+  "language": "en"
+}
+```
+
+**Response:** NDJSON stream
+
+**Example (Python):**
+```python
+import requests
+import json
+
+response = requests.post(
+    "http://localhost:8765/v1/tts/stream",
+    json={"text": "Streaming!", "language": "en"},
+    stream=True,
+)
+
+for line in response.iter_lines():
+    if line:
+        chunk = json.loads(line)
+        print(f"Chunk {chunk['sequence']}: {chunk['final']}")
+```
+
+### `POST /v1/stt`
+
+Transcribe WAV audio to text.
+
+**Request:** WAV audio bytes
+
+**Query Parameter:** `language`
+
+**Response:**
+```json
+{"text": "Transcribed text"}
+```
+
+**Example (Python):**
+```python
+import requests
+
+with open("recording.wav", "rb") as f:
+    audio = f.read()
+
+response = requests.post(
+    "http://localhost:8765/v1/stt",
+    params={"language": "en"},
+    data=audio,
+    headers={"Content-Type": "audio/wav"},
+)
+
+print(response.json()["text"])
+```
+
+## Client Examples
+
+### Python Client
+
+```python
+import requests
+import json
+
+class VoxLocalClient:
+    def __init__(self, base_url: str = "http://localhost:8765"):
+        self.base_url = base_url
+
+    def health(self) -> dict:
+        response = requests.get(f"{self.base_url}/v1/health")
+        return response.json()
+
+    def tts(self, text: str, language: str = "en") -> bytes:
+        response = requests.post(
+            f"{self.base_url}/v1/tts",
+            json={"text": text, "language": language},
+        )
+        return response.content
+
+    def tts_stream(self, text: str, language: str = "en"):
+        response = requests.post(
+            f"{self.base_url}/v1/tts/stream",
+            json={"text": text, "language": language},
+            stream=True,
+        )
+        for line in response.iter_lines():
+            if line:
+                yield json.loads(line)
+
+    def stt(self, audio_path: str, language: str = "en") -> str:
+        with open(audio_path, "rb") as f:
+            audio = f.read()
+        response = requests.post(
+            f"{self.base_url}/v1/stt",
+            params={"language": language},
+            data=audio,
+            headers={"Content-Type": "audio/wav"},
+        )
+        return response.json()["text"]
+
+# Usage
+client = VoxLocalClient()
+
+# Health check
+print(client.health())
+
+# TTS
+wav_bytes = client.tts("Hello!")
+with open("hello.wav", "wb") as f:
+    f.write(wav_bytes)
+
+# STT
+text = client.stt("hello.wav")
+print(text)
+```
+
+### JavaScript Client
+
+```javascript
+class VoxLocalClient {
+  constructor(baseUrl = 'http://localhost:8765') {
+    this.baseUrl = baseUrl;
+  }
+
+  async health() {
+    const response = await fetch(`${this.baseUrl}/v1/health`);
+    return response.json();
+  }
+
+  async tts(text, language = 'en') {
+    const response = await fetch(`${this.baseUrl}/v1/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, language }),
+    });
+    return response.blob();
+  }
+
+  async stt(audioBlob, language = 'en') {
+    const response = await fetch(
+      `${this.baseUrl}/v1/stt?language=${language}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/wav' },
+        body: audioBlob,
+      }
+    );
+    return response.json();
+  }
+}
+
+// Usage
+const client = new VoxLocalClient();
+
+// TTS
+const audioBlob = await client.tts('Hello!');
+const audioUrl = URL.createObjectURL(audioBlob);
+const audio = new Audio(audioUrl);
+audio.play();
+```
+
+## Docker Deployment
+
+### Dockerfile
+
+```dockerfile
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+RUN pip install 'voxlocal[tts,server]'
+
+# Download models
+RUN python -c "from voxlocal import VoxLocal; vl = VoxLocal('en'); vl.setup()"
+
+# Expose port
+EXPOSE 8765
+
+# Run server
+CMD ["python", "-m", "voxlocal.server", "--host", "0.0.0.0", "--port", "8765"]
+```
+
+### Build and Run
+
+```bash
+docker build -t voxlocal-server .
+docker run -p 8765:8765 voxlocal-server
+```
+
+## Error Handling
+
+All errors return HTTP 400 with a JSON detail:
+
+```json
+{"detail": "Language not supported: xyz"}
+```
+
+## Next Steps
+
+- [HTTP Server API](/docs/api/server) — Full API reference
+- [Basic Usage](/docs/examples/basic-usage) — More examples

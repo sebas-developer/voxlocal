@@ -1,0 +1,314 @@
+---
+title: Custom Engine
+description: Implement your own STT or TTS engine for VoxLocal
+---
+
+VoxLocal uses protocols for engine interfaces, making it easy to add custom engines.
+
+## Engine Protocols
+
+### STTEngine Protocol
+
+```python
+from typing import Protocol
+
+class STTEngine(Protocol):
+    def transcribe(self, audio_path: str) -> str:
+        """Transcribe audio file to text."""
+        ...
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        ...
+```
+
+### TTSEngine Protocol
+
+```python
+from typing import Protocol
+from collections.abc import Iterator
+from voxlocal._audio import AudioResult
+
+class TTSEngine(Protocol):
+    def speak(self, text: str) -> AudioResult:
+        """Synthesize text to audio."""
+        ...
+
+    def speak_iter(
+        self, text: str, chunk_by: str = "progressive"
+    ) -> Iterator[AudioResult]:
+        """Synthesize text to audio chunks."""
+        ...
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        ...
+```
+
+## Example: Custom STT Engine
+
+Here's how to implement a custom STT engine:
+
+```python
+from pathlib import Path
+from voxlocal.stt import STTEngine
+from voxlocal._audio import AudioResult
+
+class MyCustomSTT:
+    def __init__(self, language: str, model_dir: Path):
+        self.language = language
+        self.model_dir = model_dir
+        self._model = None
+
+    def transcribe(self, audio_path: str) -> str:
+        """Transcribe audio file to text."""
+        if self._model is None:
+            self._load_model()
+
+        # Your transcription logic here
+        audio_data = self._load_audio(audio_path)
+        result = self._model.transcribe(audio_data)
+        return result.text
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        self._load_model()
+
+    def _load_model(self):
+        """Load your model."""
+        # Example: load from model_dir
+        self._model = YourModelLibrary.load(self.model_dir / "model.bin")
+
+    def _load_audio(self, path: str):
+        """Load audio file."""
+        # Your audio loading logic
+        pass
+```
+
+### Register Custom STT Engine
+
+To use your custom engine, modify the `resolve_stt_engine` function:
+
+```python
+from voxlocal.stt import resolve_stt_engine
+
+def custom_resolver(engine_name: str, language: str, model_dir: Path):
+    if engine_name == "my_custom":
+        from my_module import MyCustomSTT
+        return MyCustomSTT(language=language, model_dir=model_dir)
+    return resolve_stt_engine(engine_name, language, model_dir)
+
+# Use custom resolver
+from voxlocal import VoxLocal
+vl = VoxLocal("en", stt_engine="my_custom")
+```
+
+## Example: Custom TTS Engine
+
+Here's how to implement a custom TTS engine:
+
+```python
+from pathlib import Path
+from collections.abc import Iterator
+from voxlocal.tts import TTSEngine
+from voxlocal._audio import AudioResult
+import numpy as np
+
+class MyCustomTTS:
+    def __init__(self, language: str, model_dir: Path):
+        self.language = language
+        self.model_dir = model_dir
+        self._model = None
+        self._sample_rate = 22050
+
+    def speak(self, text: str) -> AudioResult:
+        """Synthesize text to audio."""
+        if self._model is None:
+            self._load_model()
+
+        # Your synthesis logic here
+        audio_data = self._synthesize(text)
+        return AudioResult(
+            numpy=audio_data,
+            sample_rate=self._sample_rate,
+        )
+
+    def speak_iter(
+        self, text: str, chunk_by: str = "progressive"
+    ) -> Iterator[AudioResult]:
+        """Synthesize text to audio chunks."""
+        if self._model is None:
+            self._load_model()
+
+        # Split text into chunks
+        chunks = self._split_text(text, chunk_by)
+
+        # Yield audio for each chunk
+        for chunk_text in chunks:
+            audio_data = self._synthesize(chunk_text)
+            yield AudioResult(
+                numpy=audio_data,
+                sample_rate=self._sample_rate,
+            )
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        self._load_model()
+        # Run a warmup synthesis
+        self._synthesize("warmup")
+
+    def _load_model(self):
+        """Load your model."""
+        self._model = YourModelLibrary.load(self.model_dir / "model.bin")
+
+    def _synthesize(self, text: str) -> np.ndarray:
+        """Synthesize text to audio."""
+        # Your synthesis logic here
+        return self._model.generate(text)
+
+    def _split_text(self, text: str, chunk_by: str) -> list[str]:
+        """Split text into chunks."""
+        # Your text splitting logic
+        return [text]
+```
+
+### Register Custom TTS Engine
+
+```python
+from voxlocal.tts import resolve_tts_engine
+
+def custom_resolver(engine_name: str, language: str, model_dir: Path):
+    if engine_name == "my_custom":
+        from my_module import MyCustomTTS
+        return MyCustomTTS(language=language, model_dir=model_dir)
+    return resolve_tts_engine(engine_name, language, model_dir)
+```
+
+## Full Example: Integration
+
+Here's a complete example integrating a custom engine:
+
+```python
+from pathlib import Path
+from collections.abc import Iterator
+import numpy as np
+
+from voxlocal import VoxLocal
+from voxlocal._audio import AudioResult
+from voxlocal.stt import STTEngine
+from voxlocal.tts import TTSEngine
+
+
+class MySTT:
+    """Custom STT engine."""
+
+    def __init__(self, language: str, model_dir: Path):
+        self.language = language
+        self.model_dir = model_dir
+
+    def transcribe(self, audio_path: str) -> str:
+        return f"Transcribed from {audio_path}"
+
+    def warmup(self) -> None:
+        pass
+
+
+class MyTTS:
+    """Custom TTS engine."""
+
+    def __init__(self, language: str, model_dir: Path):
+        self.language = language
+        self.model_dir = model_dir
+        self._sample_rate = 22050
+
+    def speak(self, text: str) -> AudioResult:
+        samples = np.random.randn(self._sample_rate).astype(np.float32)
+        return AudioResult(numpy=samples, sample_rate=self._sample_rate)
+
+    def speak_iter(
+        self, text: str, chunk_by: str = "progressive"
+    ) -> Iterator[AudioResult]:
+        for i in range(3):
+            samples = np.random.randn(self._sample_rate).astype(np.float32)
+            yield AudioResult(numpy=samples, sample_rate=self._sample_rate)
+
+    def warmup(self) -> None:
+        pass
+
+
+# Usage
+vl = VoxLocal("en")
+vl._stt = MySTT("en", Path("/tmp/models"))
+vl._tts = MyTTS("en", Path("/tmp/models"))
+
+# Use normally
+text = vl.transcribe("audio.wav")
+audio = vl.speak("Hello!")
+```
+
+## Best Practices
+
+### 1. Follow the Protocol
+
+Implement all methods defined in the protocol:
+
+```python
+class MyEngine:
+    def transcribe(self, audio_path: str) -> str:  # Required
+        ...
+
+    def warmup(self) -> None:  # Required
+        ...
+```
+
+### 2. Handle Errors
+
+Raise appropriate VoxLocal errors:
+
+```python
+from voxlocal._errors import TranscriptionError, SynthesisError
+
+class MySTT:
+    def transcribe(self, audio_path: str) -> str:
+        try:
+            return self._do_transcription(audio_path)
+        except Exception as e:
+            raise TranscriptionError(str(e)) from e
+```
+
+### 3. Lazy Loading
+
+Load models on first use, not at initialization:
+
+```python
+class MyEngine:
+    def __init__(self, model_dir: Path):
+        self._model_dir = model_dir
+        self._model = None  # Not loaded yet
+
+    def _ensure_model(self):
+        if self._model is None:
+            self._model = load_model(self._model_dir)
+
+    def transcribe(self, audio_path: str) -> str:
+        self._ensure_model()
+        return self._model.transcribe(audio_path)
+```
+
+### 4. Support Warmup
+
+Implement warmup for faster first inference:
+
+```python
+class MyEngine:
+    def warmup(self) -> None:
+        self._ensure_model()
+        # Run a small inference
+        self._model.transcribe("warmup.wav")
+```
+
+## Next Steps
+
+- [Engines](/docs/concepts/engines) — Understand existing engines
+- [API: STTEngine](/docs/api/types#sttengine) — Protocol reference
+- [API: TTSEngine](/docs/api/types#ttsengine) — Protocol reference

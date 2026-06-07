@@ -1,0 +1,250 @@
+---
+title: HTTP Server
+description: API reference for the VoxLocal HTTP server
+---
+
+The optional HTTP server provides a REST API for STT and TTS operations using FastAPI.
+
+## Starting the Server
+
+### Command Line
+
+```bash
+# Basic server
+python -m voxlocal.server
+
+# Custom host and port
+python -m voxlocal.server --host 0.0.0.0 --port 9000
+
+# With CORS support
+python -m voxlocal.server --cors-origin http://localhost:3000
+
+# With custom cache directory
+python -m voxlocal.server --cache-dir /path/to/models
+```
+
+### Programmatic
+
+```python
+from voxlocal.server import create_app
+import uvicorn
+
+app = create_app()
+uvicorn.run(app, host="127.0.0.1", port=8765)
+```
+
+## Configuration
+
+### `create_app()`
+
+```python
+def create_app(
+    *,
+    voxlocal_factory: Callable[..., VoxLocal] = VoxLocal,
+    cache_dir: str | Path | None = None,
+    cors_origins: tuple[str, ...] = (),
+) -> FastAPI
+```
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `voxlocal_factory` | `Callable` | `VoxLocal` | Factory function to create instances |
+| `cache_dir` | `str \| Path \| None` | `None` | Custom model cache directory |
+| `cors_origins` | `tuple[str, ...]` | `()` | Allowed CORS origins |
+
+**Example:**
+
+```python
+from voxlocal import VoxLocal
+from voxlocal.server import create_app
+
+def my_factory(**kwargs):
+    return VoxLocal(**kwargs, cache_dir="/custom/path")
+
+app = create_app(
+    voxlocal_factory=my_factory,
+    cors_origins=("http://localhost:3000",),
+)
+```
+
+## Endpoints
+
+### `GET /v1/health`
+
+Health check endpoint.
+
+**Response:**
+```json
+{"status": "ok"}
+```
+
+### `POST /v1/tts`
+
+Synthesize text to WAV audio.
+
+**Request Body:**
+```json
+{
+  "text": "Hello, world!",
+  "language": "en"
+}
+```
+
+**Response:** WAV audio bytes (`audio/wav`)
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8765/v1/tts \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hello!", "language": "en"}' \
+  --output hello.wav
+```
+
+**Python:**
+
+```python
+import requests
+
+response = requests.post(
+    "http://localhost:8765/v1/tts",
+    json={"text": "Hello!", "language": "en"},
+)
+
+with open("hello.wav", "wb") as f:
+    f.write(response.content)
+```
+
+**Errors:**
+- `422` — Missing or empty `text`/`language`
+- `400` — Synthesis error
+
+### `POST /v1/tts/stream`
+
+Stream TTS as NDJSON chunks.
+
+**Request Body:**
+```json
+{
+  "text": "This is a long sentence that streams.",
+  "language": "en"
+}
+```
+
+**Response:** NDJSON stream (`application/x-ndjson`)
+
+Each line is a JSON object:
+```json
+{"type":"audio_chunk","sequence":0,"sample_rate":22050,"channels":1,"encoding":"pcm_s16le","final":false,"source_chunk":0,"audio_base64":"UklGR..."}
+```
+
+**Example:**
+
+```bash
+curl -X POST http://localhost:8765/v1/tts/stream \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Streaming text!", "language": "en"}'
+```
+
+**Python:**
+
+```python
+import requests
+import json
+
+response = requests.post(
+    "http://localhost:8765/v1/tts/stream",
+    json={"text": "Streaming!", "language": "en"},
+    stream=True,
+)
+
+for line in response.iter_lines():
+    if line:
+        chunk = json.loads(line)
+        print(f"Chunk {chunk['sequence']}: {chunk['final']}")
+```
+
+### `POST /v1/stt`
+
+Transcribe WAV audio to text.
+
+**Request:** WAV audio bytes in request body
+
+**Query Parameter:** `language` (e.g., `?language=en`)
+
+**Response:**
+```json
+{"text": "Transcribed text"}
+```
+
+**Example:**
+
+```bash
+curl -X POST "http://localhost:8765/v1/stt?language=en" \
+  -H "Content-Type: audio/wav" \
+  --data-binary @recording.wav
+```
+
+**Python:**
+
+```python
+with open("recording.wav", "rb") as f:
+    audio_bytes = f.read()
+
+response = requests.post(
+    "http://localhost:8765/v1/stt",
+    params={"language": "en"},
+    data=audio_bytes,
+    headers={"Content-Type": "audio/wav"},
+)
+
+print(response.json()["text"])
+```
+
+**Errors:**
+- `422` — Empty audio body
+- `400` — Transcription error
+
+## Thread Safety
+
+The server uses a lock to manage VoxLocal instances. Multiple requests for the same language+capability share a single instance:
+
+```python
+# Thread-safe instance management
+instances: dict[tuple[str, str], VoxLocal] = {}
+instances_lock = Lock()
+```
+
+## CORS Configuration
+
+Enable browser access by specifying allowed origins:
+
+```bash
+python -m voxlocal.server \
+  --cors-origin http://localhost:3000 \
+  --cors-origin https://myapp.com
+```
+
+Or programmatically:
+
+```python
+app = create_app(
+    cors_origins=("http://localhost:3000", "https://myapp.com"),
+)
+```
+
+## Error Handling
+
+All VoxLocal errors are caught and returned as HTTP 400 responses:
+
+```json
+{"detail": "Language not supported: xyz"}
+```
+
+FastAPI validation errors return HTTP 422:
+
+```json
+{"detail": [{"type": "missing", "loc": ["body", "text"], "msg": "Field required"}]}
+```

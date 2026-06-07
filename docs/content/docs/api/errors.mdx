@@ -1,0 +1,278 @@
+---
+title: Errors
+description: Error types and handling in VoxLocal
+---
+
+VoxLocal uses a structured exception hierarchy. All errors inherit from `VoxLocalError`.
+
+## Exception Hierarchy
+
+```
+VoxLocalError
+├── LanguageNotSupportedError
+├── EngineNotSupportedError
+├── ModelNotDownloadedError
+├── ModelDownloadError
+├── DependencyMissingError
+├── TranscriptionError
+└── SynthesisError
+```
+
+## Base Exception
+
+### `VoxLocalError`
+
+Base exception for all VoxLocal errors.
+
+```python
+class VoxLocalError(Exception):
+    """Base exception for VoxLocal."""
+```
+
+Catch all VoxLocal errors with:
+
+```python
+from voxlocal._errors import VoxLocalError
+
+try:
+    vl.transcribe("audio.wav")
+except VoxLocalError as e:
+    print(f"VoxLocal error: {e}")
+```
+
+## Language Errors
+
+### `LanguageNotSupportedError`
+
+Raised when a language is not supported for the requested capability.
+
+```python
+class LanguageNotSupportedError(VoxLocalError):
+    def __init__(self, language: str, capability: str | None = None):
+        self.language = language
+        self.capability = capability
+```
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `language` | `str` | The unsupported language code |
+| `capability` | `str \| None` | "stt" or "tts" (None for general) |
+
+**Example:**
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import LanguageNotSupportedError
+
+try:
+    vl = VoxLocal("xyz")
+except LanguageNotSupportedError as e:
+    print(e.language)    # "xyz"
+    print(e.capability)  # None
+    print(str(e))        # "Language not supported: xyz"
+```
+
+## Engine Errors
+
+### `EngineNotSupportedError`
+
+Raised when an engine doesn't support the requested language.
+
+```python
+class EngineNotSupportedError(VoxLocalError):
+    def __init__(self, capability: str, engine: str, language: str):
+        self.capability = capability
+        self.engine = engine
+        self.language = language
+```
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `capability` | `str` | "stt" or "tts" |
+| `engine` | `str` | Engine name (e.g., "moonshine") |
+| `language` | `str` | Language code |
+
+**Example:**
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import EngineNotSupportedError
+
+try:
+    vl = VoxLocal("en", stt_engine="moonshine")
+except EngineNotSupportedError as e:
+    print(e.engine)     # "moonshine"
+    print(e.language)   # "en"
+    print(str(e))       # "STT engine 'moonshine' does not support language 'en'"
+```
+
+## Model Errors
+
+### `ModelNotDownloadedError`
+
+Raised when a model hasn't been downloaded yet.
+
+```python
+class ModelNotDownloadedError(VoxLocalError):
+    def __init__(self, model_id: str, message: str | None = None):
+        self.model_id = model_id
+        self.message = message or f"Model not downloaded..."
+```
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `model_id` | `str` | Model identifier |
+| `message` | `str` | Error message with setup instructions |
+
+**Example:**
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import ModelNotDownloadedError
+
+vl = VoxLocal("en")
+try:
+    vl.transcribe("audio.wav")  # Forgot to call setup()
+except ModelNotDownloadedError as e:
+    print(e.model_id)  # "sensevoice_onnx"
+    print(e.message)   # "Model not downloaded. Run v.setup() first."
+```
+
+### `ModelDownloadError`
+
+Raised when model download fails.
+
+```python
+class ModelDownloadError(VoxLocalError):
+    """Raised when model setup fails."""
+```
+
+**Example:**
+
+```python
+from voxlocal._errors import ModelDownloadError
+
+try:
+    vl.download_model("supertonic_3")
+except ModelDownloadError as e:
+    print(f"Download failed: {e}")
+```
+
+## Dependency Errors
+
+### `DependencyMissingError`
+
+Raised when an optional dependency is not installed.
+
+```python
+class DependencyMissingError(VoxLocalError):
+    def __init__(self, dependency: str, extra: str):
+        self.dependency = dependency
+        self.extra = extra
+```
+
+**Attributes:**
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `dependency` | `str` | Package name (e.g., "fastapi") |
+| `extra` | `str` | pip extra name (e.g., "server") |
+
+**Example:**
+
+```python
+from voxlocal._errors import DependencyMissingError
+
+try:
+    from voxlocal.server import create_app
+except DependencyMissingError as e:
+    print(e.dependency)  # "fastapi"
+    print(e.extra)       # "server"
+    print(str(e))        # "Missing optional dependency 'fastapi'. Install with: pip install 'voxlocal[server]'"
+```
+
+**Handling:**
+
+```python
+try:
+    vl.play("Hello!")
+except DependencyMissingError as e:
+    print(f"Install {e.extra}: pip install 'voxlocal[{e.extra}]'")
+```
+
+## Processing Errors
+
+### `TranscriptionError`
+
+Raised when STT transcription fails.
+
+```python
+class TranscriptionError(VoxLocalError):
+    """Error during transcription."""
+```
+
+### `SynthesisError`
+
+Raised when TTS synthesis fails.
+
+```python
+class SynthesisError(VoxLocalError):
+    """Error during synthesis."""
+```
+
+**Example:**
+
+```python
+from voxlocal._errors import SynthesisError
+
+try:
+    audio = vl.speak("Hello!")
+except SynthesisError as e:
+    print(f"Synthesis failed: {e}")
+```
+
+## Best Practices
+
+### Catch Specific Errors First
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import (
+    VoxLocalError,
+    LanguageNotSupportedError,
+    ModelNotDownloadedError,
+    DependencyMissingError,
+)
+
+vl = VoxLocal("en")
+
+try:
+    vl.setup()
+    audio = vl.speak("Hello!")
+except LanguageNotSupportedError:
+    print("Language not available")
+except ModelNotDownloadedError:
+    print("Model download failed")
+except DependencyMissingError as e:
+    print(f"Install: pip install 'voxlocal[{e.extra}]'")
+except VoxLocalError as e:
+    print(f"VoxLocal error: {e}")
+```
+
+### Validate Language First
+
+```python
+from voxlocal import VoxLocal, SUPPORTED_LANGUAGES
+
+language = "en"
+if language not in SUPPORTED_LANGUAGES:
+    raise ValueError(f"Unsupported: {language}. Use: {SUPPORTED_LANGUAGES}")
+
+vl = VoxLocal(language)
+```

@@ -1,0 +1,247 @@
+---
+title: Playback
+description: Play audio through speakers with VoxLocal
+---
+
+This guide covers playing audio directly through your speakers using VoxLocal.
+
+## Quick Start
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Play text directly
+vl.play("Hello, world!")
+```
+
+## Basic Playback
+
+### Simple Play
+
+```python
+vl.play("This plays through your default audio device.")
+```
+
+### Play with Progress
+
+```python
+def on_event(event):
+    print(f"Playing chunk {event.sequence}")
+    print(f"  Elapsed: {event.elapsed_seconds:.1f}s")
+
+vl.play("Hello!", on_event=on_event)
+```
+
+## PlaybackEvent
+
+The `on_event` callback receives `PlaybackEvent` objects:
+
+```python
+@dataclass(frozen=True)
+class PlaybackEvent:
+    kind: Literal["playing"]
+    sequence: int
+    elapsed_seconds: float
+    audio_seconds: float
+    final: bool
+```
+
+**Example:**
+
+```python
+def on_event(event):
+    if event.kind == "playing":
+        print(f"Chunk {event.sequence}: {event.audio_seconds:.3f}s")
+        if event.final:
+            print("Playback complete!")
+```
+
+## Audio Device Selection
+
+### Default Device
+
+```python
+vl.play("Hello!")  # Uses default audio device
+```
+
+### Specific Device
+
+```python
+import sounddevice as sd
+
+# List available devices
+print(sd.query_devices())
+
+# Play to specific device
+vl.play("Hello!", device=0)  # By index
+vl.play("Hello!", device="Speakers")  # By name
+```
+
+## Streaming Playback
+
+For real-time applications, stream and play simultaneously:
+
+```python
+from voxlocal.playback import play
+
+# Get streaming chunks
+stream = vl.stream("This plays in real-time!")
+
+# Play the stream
+play(stream)
+```
+
+### With Progress
+
+```python
+from voxlocal.playback import play
+
+def on_event(event):
+    print(f"Playing chunk {event.sequence} ({event.elapsed_seconds:.1f}s)")
+
+stream = vl.stream("Real-time playback!")
+play(stream, on_event=on_event)
+```
+
+## Manual Playback
+
+For full control, handle chunks manually:
+
+```python
+import sounddevice as sd
+
+# Get chunks
+chunks = list(vl.stream("Manual playback!"))
+
+# Play manually
+with sd.OutputStream(
+    samplerate=chunks[0].sample_rate,
+    channels=1,
+    dtype="float32",
+) as stream:
+    for chunk in chunks:
+        stream.write(chunk.numpy)
+```
+
+### Custom Buffering
+
+```python
+import sounddevice as sd
+from queue import Queue
+import threading
+
+audio_queue = Queue()
+
+def producer():
+    for chunk in vl.stream("Custom buffering!"):
+        audio_queue.put(chunk.numpy)
+    audio_queue.put(None)
+
+def consumer():
+    with sd.OutputStream(
+        samplerate=22050,
+        channels=1,
+        dtype="float32",
+    ) as stream:
+        while True:
+            data = audio_queue.get()
+            if data is None:
+                break
+            stream.write(data)
+
+threading.Thread(target=producer, daemon=True).start()
+consumer()
+```
+
+## Dependency: sounddevice
+
+Playback requires the `sounddevice` package:
+
+```bash
+pip install 'voxlocal[playback]'
+```
+
+### Installation Issues
+
+**macOS:**
+```bash
+# PortAudio is usually pre-installed
+pip install 'voxlocal[playback]'
+```
+
+**Linux:**
+```bash
+sudo apt-get install libportaudio2
+pip install 'voxlocal[playback]'
+```
+
+**Windows:**
+```bash
+pip install 'voxlocal[playback]'
+```
+
+### Error Handling
+
+```python
+from voxlocal._errors import DependencyMissingError
+
+try:
+    vl.play("Hello!")
+except DependencyMissingError as e:
+    print(f"Install: pip install 'voxlocal[{e.extra}]'")
+```
+
+## Error Handling
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import (
+    DependencyMissingError,
+    SynthesisError,
+)
+
+vl = VoxLocal("en")
+vl.setup()
+
+try:
+    vl.play("Hello!")
+except DependencyMissingError:
+    print("Install sounddevice: pip install 'voxlocal[playback]'")
+except SynthesisError as e:
+    print(f"Playback failed: {e}")
+```
+
+## Complete Example
+
+```python
+from voxlocal import VoxLocal
+from voxlocal.playback import PlaybackEvent
+
+def main():
+    vl = VoxLocal("en")
+    vl.setup()
+
+    def on_event(event: PlaybackEvent):
+        print(f"[{event.elapsed_seconds:.1f}s] Playing chunk {event.sequence}")
+        if event.final:
+            print("Done!")
+
+    print("Playing...")
+    vl.play(
+        "Hello! This is VoxLocal speaking through your speakers.",
+        on_event=on_event,
+    )
+    print("Finished!")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Next Steps
+
+- [Streaming Guide](/docs/guides/streaming) — Advanced streaming patterns
+- [API: play()](/docs/api/voxlocal#play) — Full API reference
+- [FastAPI Server Example](/docs/examples/fastapi-server) — Serve audio over HTTP

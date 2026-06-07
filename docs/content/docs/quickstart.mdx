@@ -1,0 +1,151 @@
+---
+title: Quickstart
+description: Get up and running with VoxLocal in 5 minutes
+---
+
+This guide walks you through your first STT and TTS operations with VoxLocal.
+
+## Step 1: Install
+
+```bash
+pip install 'voxlocal[tts,sensevoice]'
+```
+
+This installs VoxLocal with TTS and English STT support.
+
+## Step 2: Initialize
+
+```python
+from voxlocal import VoxLocal
+
+# Create an instance for English
+vl = VoxLocal("en")
+```
+
+## Step 3: Download Models
+
+On first run, download the required models:
+
+```python
+# Download all models and warm up TTS
+progress = vl.setup()
+
+for p in progress:
+    print(f"{p.model_id}: {p.description}")
+```
+
+Output:
+```
+sensevoice_onnx: sensevoice_onnx: download started
+sensevoice_onnx: sensevoice_onnx: download complete
+supertonic_3: supertonic_3: download started
+supertonic_3: supertonic_3: download complete
+```
+
+## Step 4: Text-to-Speech
+
+Generate audio from text:
+
+```python
+# Generate complete audio
+audio = vl.speak("Hello! Welcome to VoxLocal.")
+
+# Check duration
+print(f"Duration: {audio.duration_seconds:.2f}s")
+
+# Save to file
+audio.save("welcome.wav")
+
+# Or get raw WAV bytes
+wav_bytes = audio.bytes
+```
+
+### Audio Result Properties
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `numpy` | `np.ndarray` | Raw float32 audio samples |
+| `sample_rate` | `int` | Sample rate in Hz |
+| `duration_seconds` | `float` | Duration in seconds |
+| `bytes` | `bytes` | Complete WAV file bytes |
+| `pcm_s16le` | `bytes` | Raw PCM16 little-endian |
+
+## Step 5: Speech-to-Text
+
+Transcribe an audio file:
+
+```python
+text = vl.transcribe("welcome.wav")
+print(text)  # "Hello! Welcome to VoxLocal."
+```
+
+## Step 6: Streaming TTS
+
+For real-time applications, stream audio chunks:
+
+```python
+# Generate chunks as they're produced
+for chunk in vl.stream("This is a long sentence that streams progressively."):
+    print(f"Chunk {chunk.sequence}: {chunk.duration_seconds:.2f}s")
+    # Process chunk (play, send over network, etc.)
+```
+
+### What is Streaming?
+
+Instead of waiting for the entire audio to generate, VoxLocal yields small chunks with:
+
+- **Prefetch**: Background thread generates upcoming chunks
+- **Crossfading**: Smooth transitions between chunks
+- **Silence trimming**: Clean chunk boundaries
+
+## Step 7: Playback
+
+Play audio directly through your speakers:
+
+```python
+vl.play("Hello, world!")
+```
+
+With progress callbacks:
+
+```python
+def on_event(event):
+    print(f"Playing chunk {event.sequence} ({event.elapsed_seconds:.1f}s elapsed)")
+
+vl.play("Hello, world!", on_event=on_event)
+```
+
+## Complete Example
+
+```python
+from voxlocal import VoxLocal
+
+def main():
+    # Initialize
+    vl = VoxLocal("en")
+    vl.setup()
+
+    # TTS
+    audio = vl.speak("VoxLocal is amazing for local voice processing!")
+    audio.save("output.wav")
+    print(f"Saved {audio.duration_seconds:.1f}s of audio")
+
+    # STT
+    text = vl.transcribe("output.wav")
+    print(f"Transcribed: {text}")
+
+    # Streaming
+    print("\nStreaming:")
+    for chunk in vl.stream("This streams in real-time."):
+        print(f"  Chunk {chunk.sequence}: {chunk.duration_seconds:.3f}s")
+
+if __name__ == "__main__":
+    main()
+```
+
+## Next Steps
+
+- [STT Guide](/docs/guides/stt) — Deep dive into speech-to-text
+- [TTS Guide](/docs/guides/tts) — Deep dive into text-to-speech
+- [Streaming Guide](/docs/guides/streaming) — Advanced streaming patterns
+- [HTTP Server](/docs/examples/fastapi-server) — Deploy as a REST API

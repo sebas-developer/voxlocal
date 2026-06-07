@@ -1,0 +1,302 @@
+---
+title: Types
+description: Data types and classes used in VoxLocal
+---
+
+## Core Types
+
+### `AudioResult`
+
+Result of TTS synthesis. Contains the complete audio for a synthesis operation.
+
+```python
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass(frozen=True)
+class AudioResult:
+    numpy: np.ndarray
+    sample_rate: int
+```
+
+**Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `numpy` | `np.ndarray` | Mono float32 audio samples, range [-1.0, 1.0] |
+| `sample_rate` | `int` | Sample rate in Hz |
+| `duration_seconds` | `float` | Duration calculated as `len(numpy) / sample_rate` |
+| `bytes` | `bytes` | Complete WAV file bytes |
+| `pcm_s16le` | `bytes` | Raw signed 16-bit little-endian PCM |
+
+**Validation:**
+- `sample_rate` must be positive
+- `numpy` is normalized to mono float32 on creation
+
+**Example:**
+
+```python
+audio = vl.speak("Hello!")
+
+# Access raw samples
+samples = audio.numpy  # np.ndarray of float32
+
+# Get duration
+duration = audio.duration_seconds  # float, seconds
+
+# Save as WAV
+audio.save("output.wav")
+
+# Get WAV bytes
+wav_data = audio.bytes
+
+# Get raw PCM
+pcm_data = audio.pcm_s16le
+```
+
+### `AudioChunk`
+
+Portable streaming audio block. Produced by `vl.stream()` and ready for playback or network transmission.
+
+```python
+from dataclasses import dataclass
+import numpy as np
+
+@dataclass(frozen=True)
+class AudioChunk:
+    sequence: int
+    numpy: np.ndarray
+    sample_rate: int
+    final: bool = False
+    source_chunk: int | None = None
+```
+
+**Properties:**
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `sequence` | `int` | Chunk order (0-indexed) |
+| `numpy` | `np.ndarray` | Mono float32 audio samples |
+| `sample_rate` | `int` | Sample rate in Hz |
+| `final` | `bool` | True for the last chunk in the stream |
+| `source_chunk` | `int \| None` | Original engine chunk index |
+| `duration_seconds` | `float` | Duration in seconds |
+| `pcm_s16le` | `bytes` | Raw PCM16 bytes |
+| `to_wire_dict()` | `dict` | Serialized metadata + base64 audio |
+
+**Validation:**
+- `sequence` must be non-negative
+- `sample_rate` must be positive
+
+**Example:**
+
+```python
+for chunk in vl.stream("Hello!"):
+    print(f"Chunk {chunk.sequence}: {chunk.duration_seconds:.3f}s")
+
+    # Play the chunk
+    play_audio(chunk.numpy, chunk.sample_rate)
+
+    # Send over network
+    wire_data = chunk.to_wire_dict()
+    send_json(wire_data)
+
+    # Check if final
+    if chunk.final:
+        print("Stream complete!")
+```
+
+### `DownloadProgress`
+
+Observable model download state.
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class DownloadProgress:
+    model_id: str
+    percent: int
+    downloaded: str
+    total: str
+    description: str
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `model_id` | `str` | Model identifier (e.g., "supertonic_3") |
+| `percent` | `int` | Download progress (0-100) |
+| `downloaded` | `str` | "complete" or "pending" |
+| `total` | `str` | Total size (currently "unknown") |
+| `description` | `str` | Human-readable description |
+
+**Example:**
+
+```python
+progress = vl.setup()
+for p in progress:
+    print(f"[{p.percent}%] {p.description}")
+    # [0%] sensevoice_onnx: download started
+    # [100%] sensevoice_onnx: download complete
+    # [0%] supertonic_3: download started
+    # [100%] supertonic_3: download complete
+```
+
+### `EngineConfig`
+
+Resolved engine and model selection for one capability.
+
+```python
+from dataclasses import dataclass
+
+@dataclass(frozen=True)
+class EngineConfig:
+    engine: str
+    model_id: str
+    size_mb: int
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `engine` | `str` | Engine name (e.g., "whisper", "supertonic") |
+| `model_id` | `str` | Model identifier |
+| `size_mb` | `int` | Download size in megabytes |
+
+**Example:**
+
+```python
+from voxlocal._config import get_stt_config, get_tts_config
+
+stt_config = get_stt_config("en")
+print(stt_config.engine)    # "sensevoice"
+print(stt_config.model_id)  # "sensevoice_onnx"
+print(stt_config.size_mb)   # 230
+
+tts_config = get_tts_config("es")
+print(tts_config.engine)    # "supertonic"
+```
+
+### `PlaybackEvent`
+
+Progress emitted during audio playback.
+
+```python
+from dataclasses import dataclass
+from typing import Literal
+
+@dataclass(frozen=True)
+class PlaybackEvent:
+    kind: Literal["playing"]
+    sequence: int
+    elapsed_seconds: float
+    audio_seconds: float
+    final: bool
+```
+
+**Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `kind` | `Literal["playing"]` | Event type |
+| `sequence` | `int` | Chunk sequence number |
+| `elapsed_seconds` | `float` | Time since playback started |
+| `audio_seconds` | `float` | Duration of the chunk being played |
+| `final` | `bool` | Whether this is the last chunk |
+
+**Example:**
+
+```python
+def on_event(event: PlaybackEvent):
+    print(f"Playing chunk {event.sequence}")
+    print(f"  Elapsed: {event.elapsed_seconds:.1f}s")
+    print(f"  Audio: {event.audio_seconds:.3f}s")
+    if event.final:
+        print("  Final chunk!")
+
+vl.play("Hello!", on_event=on_event)
+```
+
+## Protocol Types
+
+### `STTEngine`
+
+Protocol for STT engine implementations.
+
+```python
+from typing import Protocol
+
+class STTEngine(Protocol):
+    def transcribe(self, audio_path: str) -> str:
+        """Transcribe audio file to text."""
+        ...
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        ...
+```
+
+### `TTSEngine`
+
+Protocol for TTS engine implementations.
+
+```python
+from typing import Protocol
+from collections.abc import Iterator
+
+class TTSEngine(Protocol):
+    def speak(self, text: str) -> AudioResult:
+        """Synthesize text to audio."""
+        ...
+
+    def speak_iter(
+        self, text: str, chunk_by: str = "progressive"
+    ) -> Iterator[AudioResult]:
+        """Synthesize text to audio chunks."""
+        ...
+
+    def warmup(self) -> None:
+        """Pre-initialize model and resources."""
+        ...
+```
+
+## Constants
+
+### `DEFAULT_PREFETCH`
+
+Default number of chunks to prefetch:
+
+```python
+from voxlocal._stream import DEFAULT_PREFETCH
+print(DEFAULT_PREFETCH)  # 2
+```
+
+### `CROSSFADE_SECONDS`
+
+Duration of crossfade between chunks:
+
+```python
+from voxlocal._stream import CROSSFADE_SECONDS
+print(CROSSFADE_SECONDS)  # 0.08
+```
+
+### `SILENCE_THRESHOLD`
+
+Threshold for silence detection:
+
+```python
+from voxlocal._stream import SILENCE_THRESHOLD
+print(SILENCE_THRESHOLD)  # 0.002
+```
+
+### `BOUNDARY_PADDING_SECONDS`
+
+Padding kept at chunk boundaries:
+
+```python
+from voxlocal._stream import BOUNDARY_PADDING_SECONDS
+print(BOUNDARY_PADDING_SECONDS)  # 0.06
+```

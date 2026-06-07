@@ -1,0 +1,257 @@
+---
+title: Text-to-Speech (TTS)
+description: Complete guide to generating speech with VoxLocal
+---
+
+This guide covers everything you need to know about converting text to speech with VoxLocal.
+
+## Quick Start
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio = vl.speak("Hello, world!")
+audio.save("hello.wav")
+```
+
+## Basic Usage
+
+### Generate Complete Audio
+
+```python
+audio = vl.speak("This is a complete sentence.")
+
+# Save to file
+audio.save("output.wav")
+
+# Get duration
+print(f"Duration: {audio.duration_seconds:.2f}s")
+
+# Get WAV bytes
+wav_bytes = audio.bytes
+
+# Get raw PCM
+pcm_bytes = audio.pcm_s16le
+```
+
+### Working with Audio Data
+
+```python
+import numpy as np
+
+audio = vl.speak("Hello!")
+
+# Access raw samples
+samples = audio.numpy  # np.ndarray of float32
+
+# Process with numpy
+loud_samples = samples * 1.5  # Amplify
+
+# Check sample rate
+print(f"Sample rate: {audio.sample_rate} Hz")
+
+# Calculate duration
+duration = len(samples) / audio.sample_rate
+```
+
+## Chunked Synthesis
+
+For long text, use `speak_iter()` to process audio in chunks:
+
+```python
+for result in vl.speak_iter("This is a very long sentence that will be split into chunks."):
+    print(f"Chunk: {result.duration_seconds:.2f}s")
+    # Process each chunk
+    process_audio(result.numpy)
+```
+
+### Chunking Strategy
+
+The `chunk_by` parameter controls how text is split:
+
+```python
+# Progressive chunking (default) - splits at natural boundaries
+for result in vl.speak_iter("Long text...", chunk_by="progressive"):
+    process(result)
+```
+
+## Streaming TTS
+
+For real-time applications, use `stream()`:
+
+```python
+for chunk in vl.stream("This text streams in real-time."):
+    print(f"Chunk {chunk.sequence}: {chunk.duration_seconds:.3f}s")
+    play_chunk(chunk)
+```
+
+### Streaming vs Chunking
+
+| Method | Output | Use Case |
+|--------|--------|----------|
+| `speak()` | Complete audio | Short text, batch processing |
+| `speak_iter()` | Raw engine chunks | Custom processing |
+| `stream()` | Processed chunks | Real-time playback |
+
+### Streaming with Prefetch
+
+Control the prefetch buffer size:
+
+```python
+# More prefetch = smoother playback, higher latency
+for chunk in vl.stream("Long text...", prefetch=4):
+    process(chunk)
+
+# Less prefetch = lower latency, potential pauses
+for chunk in vl.stream("Long text...", prefetch=1):
+    process(chunk)
+```
+
+## Multi-Language TTS
+
+### Supported Languages
+
+All supported languages work with the Supertonic TTS engine:
+
+| Language | Code | Example |
+|----------|------|---------|
+| English | en | "Hello, world!" |
+| Spanish | es | "Hola, mundo!" |
+| Japanese | ja | "こんにちは！" |
+| Korean | ko | "안녕하세요!" |
+| French | fr | "Bonjour le monde!" |
+| German | de | "Hallo Welt!" |
+| Portuguese | pt | "Olá mundo!" |
+
+### Language-Specific Examples
+
+```python
+# English
+vl_en = VoxLocal("en")
+audio_en = vl_en.speak("Hello!")
+
+# Spanish
+vl_es = VoxLocal("es")
+audio_es = vl_es.speak("Hola!")
+
+# Japanese
+vl_ja = VoxLocal("ja")
+audio_ja = vl_ja.speak("こんにちは！")
+
+# Korean
+vl_ko = VoxLocal("ko")
+audio_ko = vl_ko.speak("안녕하세요!")
+```
+
+## Advanced Usage
+
+### Custom Cache Directory
+
+```python
+vl = VoxLocal("en", cache_dir="/path/to/models")
+vl.setup()
+```
+
+### Save in Different Formats
+
+```python
+import soundfile as sf
+
+audio = vl.speak("Hello!")
+
+# Save as WAV
+audio.save("output.wav")
+
+# Save as FLAC
+sf.write("output.flac", audio.numpy, audio.sample_rate)
+
+# Save as OGG
+sf.write("output.ogg", audio.numpy, audio.sample_rate, format="OGG")
+```
+
+### Audio Processing
+
+```python
+import numpy as np
+
+audio = vl.speak("Hello!")
+
+# Normalize volume
+normalized = audio.numpy / np.max(np.abs(audio.numpy))
+
+# Add fade in/out
+fade_in = np.linspace(0, 1, len(audio.numpy) // 10)
+fade_out = np.linspace(1, 0, len(audio.numpy) // 10)
+
+# Apply fades
+processed = audio.numpy.copy()
+processed[:len(fade_in)] *= fade_in
+processed[-len(fade_out):] *= fade_out
+```
+
+## Error Handling
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import (
+    ModelNotDownloadedError,
+    SynthesisError,
+    DependencyMissingError,
+)
+
+vl = VoxLocal("en")
+
+try:
+    vl.setup()
+    audio = vl.speak("Hello!")
+except ModelNotDownloadedError:
+    print("Downloading models...")
+    vl.setup()
+    audio = vl.speak("Hello!")
+except SynthesisError as e:
+    print(f"Synthesis failed: {e}")
+except DependencyMissingError as e:
+    print(f"Install: pip install 'voxlocal[{e.extra}]'")
+```
+
+## Performance Tips
+
+### 1. Warm Up TTS
+
+The first synthesis is slower due to model loading. Warm up:
+
+```python
+vl = VoxLocal("en")
+vl.setup(warmup_tts=True)  # Includes warmup
+```
+
+### 2. Reuse Instances
+
+```python
+vl = VoxLocal("en")
+vl.setup()
+
+# Reuse for multiple synthesis operations
+for text in text_list:
+    audio = vl.speak(text)
+    save_audio(text, audio)
+```
+
+### 3. Use Streaming for Long Text
+
+For long text, streaming reduces time to first audio:
+
+```python
+# Instead of waiting for complete synthesis
+for chunk in vl.stream(long_text):
+    play_chunk(chunk)
+```
+
+## Next Steps
+
+- [Streaming Guide](/docs/guides/streaming) — Deep dive into streaming
+- [Playback Guide](/docs/guides/playback) — Play audio through speakers
+- [Real-time TTS Example](/docs/examples/real-time-tts) — Complete real-time example

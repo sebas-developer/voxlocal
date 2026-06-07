@@ -1,0 +1,212 @@
+---
+title: Batch Transcribe
+description: Process multiple audio files efficiently
+---
+
+This example demonstrates batch transcription with progress tracking and error handling.
+
+## Simple Batch
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Transcribe all WAV files
+audio_dir = Path("recordings")
+results = {}
+
+for audio_file in sorted(audio_dir.glob("*.wav")):
+    print(f"Transcribing {audio_file.name}...")
+    results[audio_file.name] = vl.transcribe(audio_file)
+
+# Print results
+for filename, text in results.items():
+    print(f"{filename}: {text}")
+```
+
+## Batch with Progress
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio_dir = Path("recordings")
+audio_files = sorted(audio_dir.glob("*.wav"))
+total = len(audio_files)
+
+print(f"Processing {total} files...")
+
+for i, audio_file in enumerate(audio_files, 1):
+    print(f"[{i}/{total}] {audio_file.name}", end=" ... ")
+    text = vl.transcribe(audio_file)
+    print(f"OK ({len(text)} chars)")
+
+print(f"\nCompleted {total} files!")
+```
+
+## Batch with Error Handling
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+from voxlocal._errors import VoxLocalError
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio_dir = Path("recordings")
+results = {"success": [], "failed": []}
+
+for audio_file in sorted(audio_dir.glob("*.wav")):
+    try:
+        text = vl.transcribe(audio_file)
+        results["success"].append({
+            "file": audio_file.name,
+            "text": text,
+        })
+    except VoxLocalError as e:
+        results["failed"].append({
+            "file": audio_file.name,
+            "error": str(e),
+        })
+
+# Summary
+print(f"Success: {len(results['success'])}")
+print(f"Failed: {len(results['failed'])}")
+
+# Save results
+import json
+with open("transcription_results.json", "w") as f:
+    json.dump(results, f, indent=2)
+```
+
+## Batch to CSV
+
+```python
+import csv
+from pathlib import Path
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio_dir = Path("recordings")
+output_file = "transcriptions.csv"
+
+with open(output_file, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["filename", "text", "duration"])
+
+    for audio_file in sorted(audio_dir.glob("*.wav")):
+        text = vl.transcribe(audio_file)
+        writer.writerow([audio_file.name, text, ""])
+
+print(f"Saved to {output_file}")
+```
+
+## Parallel Batch Processing
+
+For CPU-bound work, use multiprocessing:
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+from concurrent.futures import ProcessPoolExecutor
+
+def transcribe_file(args):
+    audio_path, language = args
+    vl = VoxLocal(language)
+    vl.setup()
+    text = vl.transcribe(audio_path)
+    return audio_path.name, text
+
+def batch_transcribe(audio_dir: Path, language: str = "en", workers: int = 4):
+    audio_files = sorted(audio_dir.glob("*.wav"))
+    args = [(f, language) for f in audio_files]
+
+    results = {}
+    with ProcessPoolExecutor(max_workers=workers) as executor:
+        for filename, text in executor.map(transcribe_file, args):
+            results[filename] = text
+
+    return results
+
+# Usage
+results = batch_transcribe(Path("recordings"), language="en", workers=4)
+```
+
+## Batch with Language Detection
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal, SUPPORTED_LANGUAGES
+
+def auto_transcribe(audio_path: Path) -> str:
+    """Try multiple languages until one works."""
+    for language in ["en", "es", "fr", "de"]:
+        try:
+            vl = VoxLocal(language)
+            vl.setup()
+            return vl.transcribe(audio_path)
+        except Exception:
+            continue
+    return "Could not transcribe"
+
+# Usage
+audio_dir = Path("recordings")
+for audio_file in audio_dir.glob("*.wav"):
+    text = auto_transcribe(audio_file)
+    print(f"{audio_file.name}: {text}")
+```
+
+## Performance Tips
+
+### 1. Reuse Instances
+
+```python
+vl = VoxLocal("en")
+vl.setup()
+
+# Good: Reuse instance
+for file in audio_files:
+    vl.transcribe(file)
+
+# Bad: Create new instance each time
+for file in audio_files:
+    vl = VoxLocal("en")
+    vl.setup()
+    vl.transcribe(file)
+```
+
+### 2. Process in Batches
+
+For very large numbers of files, process in batches:
+
+```python
+batch_size = 100
+for i in range(0, len(audio_files), batch_size):
+    batch = audio_files[i:i+batch_size]
+    for file in batch:
+        vl.transcribe(file)
+    print(f"Processed batch {i//batch_size + 1}")
+```
+
+### 3. Use Progress Tracking
+
+```python
+from tqdm import tqdm
+
+for audio_file in tqdm(audio_files, desc="Transcribing"):
+    vl.transcribe(audio_file)
+```
+
+## Next Steps
+
+- [Basic Usage](/docs/examples/basic-usage) — Simple examples
+- [STT Guide](/docs/guides/stt) — Deep dive into STT

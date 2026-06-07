@@ -1,0 +1,198 @@
+---
+title: Speech-to-Text (STT)
+description: Complete guide to transcribing audio with VoxLocal
+---
+
+This guide covers everything you need to know about converting audio to text with VoxLocal.
+
+## Quick Start
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+text = vl.transcribe("recording.wav")
+print(text)
+```
+
+## Choosing an STT Engine
+
+VoxLocal supports three STT engines, each optimized for different languages:
+
+### SenseVoice (Recommended for EN/JA/KO)
+
+Best for English, Japanese, and Korean:
+
+```python
+vl = VoxLocal("en", stt_engine="sensevoice")
+vl.setup()
+
+text = vl.transcribe("english_audio.wav")
+```
+
+**Characteristics:**
+- Fast inference via ONNX
+- Good accuracy for Asian languages
+- 230 MB model size
+
+### Moonshine (Recommended for Spanish)
+
+Best for Spanish with minimal resources:
+
+```python
+vl = VoxLocal("es", stt_engine="moonshine")
+vl.setup()
+
+text = vl.transcribe("spanish_audio.wav")
+```
+
+**Characteristics:**
+- Fastest inference
+- Smallest model (60 MB)
+- Spanish only
+
+### Whisper (Recommended for FR/DE/PT)
+
+Best for European languages:
+
+```python
+vl = VoxLocal("fr", stt_engine="whisper")
+vl.setup()
+
+text = vl.transcribe("french_audio.wav")
+```
+
+**Characteristics:**
+- High accuracy
+- Supports many languages
+- 139 MB model size
+- Slower on CPU
+
+## Supported Audio Formats
+
+VoxLocal accepts WAV files. For other formats, convert first:
+
+```python
+import subprocess
+
+# Convert MP3 to WAV using ffmpeg
+subprocess.run(["ffmpeg", "-i", "audio.mp3", "-ar", "16000", "-ac", "1", "audio.wav"])
+
+# Then transcribe
+text = vl.transcribe("audio.wav")
+```
+
+### Recommended Audio Settings
+
+| Setting | Value | Reason |
+|---------|-------|--------|
+| Sample rate | 16000 Hz | Optimal for speech recognition |
+| Channels | 1 (mono) | Engines expect mono input |
+| Format | WAV | Native format, no conversion |
+
+## Error Handling
+
+```python
+from voxlocal import VoxLocal
+from voxlocal._errors import (
+    ModelNotDownloadedError,
+    LanguageNotSupportedError,
+    TranscriptionError,
+)
+
+vl = VoxLocal("en")
+
+try:
+    vl.setup()
+    text = vl.transcribe("audio.wav")
+except ModelNotDownloadedError:
+    print("Models not downloaded. Running setup...")
+    vl.setup()
+    text = vl.transcribe("audio.wav")
+except LanguageNotSupportedError as e:
+    print(f"Language '{e.language}' not supported for STT")
+except TranscriptionError as e:
+    print(f"Transcription failed: {e}")
+```
+
+## Batch Transcription
+
+Process multiple files efficiently:
+
+```python
+from pathlib import Path
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+audio_dir = Path("recordings")
+results = {}
+
+for audio_file in audio_dir.glob("*.wav"):
+    print(f"Transcribing {audio_file.name}...")
+    results[audio_file.name] = vl.transcribe(audio_file)
+
+# Save results
+import json
+with open("transcriptions.json", "w") as f:
+    json.dump(results, f, indent=2)
+```
+
+## Transcription with Progress
+
+Use the iterator API for large files:
+
+```python
+from voxlocal import VoxLocal
+
+vl = VoxLocal("en")
+vl.setup()
+
+# Download with progress
+for progress in vl.setup_iter():
+    print(f"{progress.model_id}: {progress.description}")
+```
+
+## Performance Tips
+
+### 1. Download Models Once
+
+Models are cached. Download once, reuse everywhere:
+
+```python
+vl = VoxLocal("en")
+vl.setup()  # Downloads models, cached for future runs
+```
+
+### 2. Reuse Instances
+
+Creating a `VoxLocal` instance is cheap. Reuse it:
+
+```python
+vl = VoxLocal("en")
+vl.setup()
+
+# Transcribe many files with the same instance
+for file in audio_files:
+    text = vl.transcribe(file)
+```
+
+### 3. Use the Right Engine
+
+Match the engine to your language for best performance:
+
+| Language | Best Engine | Why |
+|----------|-------------|-----|
+| English | SenseVoice | Fast, accurate |
+| Spanish | Moonshine | Fastest, smallest |
+| French | Whisper | Most accurate |
+| Japanese | SenseVoice | Optimized for CJK |
+
+## Next Steps
+
+- [TTS Guide](/docs/guides/tts) — Generate speech from text
+- [Streaming Guide](/docs/guides/streaming) — Real-time audio streaming
+- [Batch Examples](/docs/examples/batch-transcribe) — More batch processing patterns
