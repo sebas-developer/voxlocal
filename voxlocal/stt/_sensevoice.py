@@ -1,35 +1,57 @@
 from __future__ import annotations
 
-import numpy as np
+import re
 from pathlib import Path
 
+import numpy as np
+
+from voxlocal._errors import DependencyMissingError
 
 LANG_MAP = {"en": 4, "ja": 11, "ko": 12, "zh": 3, "yue": 7}
+CONTROL_TOKEN_PATTERN = re.compile(r"<\|[^|>]+\|>")
+
+
+def _clean_transcript(text: str) -> str:
+    """Remove SenseVoice metadata tokens from public transcript text."""
+    return CONTROL_TOKEN_PATTERN.sub("", text).strip()
 
 
 class SenseVoiceSTT:
     """SenseVoice ONNX-based STT engine."""
 
-    def __init__(self, language: str = "en"):
+    def __init__(
+        self, language: str = "en", model_dir: str | Path | None = None
+    ):
         self.language = language
+        self.model_dir = Path(model_dir).expanduser() if model_dir else None
         self._session = None
         self._embedding = None
         self._sp = None
         self._model_dir = None
 
-    def _ensure_model(self):
+    def warmup(self) -> None:
+        self._ensure_model()
+
+    def _ensure_model(self) -> None:
         if self._session is not None:
             return
-        from onnxruntime import InferenceSession, SessionOptions, GraphOptimizationLevel
-        from huggingface_hub import snapshot_download
-        import sentencepiece as spm
+        try:
+            import sentencepiece as spm
+            from onnxruntime import (
+                GraphOptimizationLevel,
+                InferenceSession,
+                SessionOptions,
+            )
+        except ImportError as error:
+            raise DependencyMissingError(
+                error.name or "sensevoice dependencies", "sensevoice"
+            ) from error
 
-        model_dir = Path.home() / ".cache" / "voxlocal" / "sensevoice_onnx"
-        if not model_dir.exists():
-            snapshot_download("lovemefan/SenseVoice-onnx", local_dir=str(model_dir))
+        if self.model_dir is None:
+            raise RuntimeError("SenseVoice model_dir is required")
+        model_dir = self.model_dir
 
         sess_opt = SessionOptions()
-        sess_opt.intra_op_num_threads = 4
         sess_opt.log_severity_level = 4
         sess_opt.graph_optimization_level = GraphOptimizationLevel.ORT_ENABLE_ALL
 
@@ -46,13 +68,17 @@ class SenseVoiceSTT:
     def transcribe(self, audio_path: str) -> str:
         self._ensure_model()
         import soundfile as sf
-        from scipy.signal import resample as scipy_resample
+        try:
+            from scipy.signal import resample_poly
+        except ImportError as error:
+            raise DependencyMissingError("scipy", "sensevoice") from error
+
         from voxlocal.stt._sensevoice_frontend import extract_features
 
         data, sr = sf.read(audio_path, dtype="float32", always_2d=True)
-        audio = data[:, 0]
+        audio = data.mean(axis=1, dtype=np.float32)
         if sr != 16000:
-            audio = scipy_resample(audio, int(len(audio) * 16000 / sr))
+            audio = resample_poly(audio, 16000, sr).astype(np.float32)
 
         feats = extract_features(audio, str(self._model_dir / "am.mvn"))
         feats = feats[None, ...]
@@ -69,4 +95,4 @@ class SenseVoiceSTT:
         mask = np.append([True], tokens[1:] != tokens[:-1])
         tokens = tokens[mask]
         tokens = tokens[tokens != 0]
-        return self._sp.DecodeIds(tokens.tolist())
+        return _clean_transcript(self._sp.DecodeIds(tokens.tolist()))

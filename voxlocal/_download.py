@@ -1,13 +1,45 @@
-# voxlocal/_download.py
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterator
+
+from platformdirs import user_cache_dir
+
+from voxlocal._errors import (
+    DependencyMissingError,
+    ModelDownloadError,
+    ModelNotDownloadedError,
+)
+
+SENSEVOICE_REPO = "lovemefan/SenseVoice-onnx"
+SENSEVOICE_REVISION = "8a5ee5b014950890a07246bc590a4f77b3ef67a4"
+SENSEVOICE_FILES = (
+    "sense-voice-encoder-int8.onnx",
+    "embedding.npy",
+    "chn_jpn_yue_eng_ko_spectok.bpe.model",
+    "am.mvn",
+)
+SUPERTONIC_FILES = (
+    "onnx/tts.json",
+    "onnx/unicode_indexer.json",
+    "onnx/duration_predictor.onnx",
+    "onnx/text_encoder.onnx",
+    "onnx/vector_estimator.onnx",
+    "onnx/vocoder.onnx",
+    "voice_styles/M1.json",
+)
+MOONSHINE_ES_FILES = (
+    "download.moonshine.ai/model/base-es/quantized/base-es/encoder_model.ort",
+    "download.moonshine.ai/model/base-es/quantized/base-es/decoder_model_merged.ort",
+    "download.moonshine.ai/model/base-es/quantized/base-es/tokenizer.bin",
+)
 
 
-@dataclass
+@dataclass(frozen=True)
 class DownloadProgress:
+    """Observable model setup state."""
+
     model_id: str
     percent: int
     downloaded: str
@@ -16,41 +48,135 @@ class DownloadProgress:
 
 
 class DownloadManager:
-    """Manages model downloads with progress tracking."""
+    """Own all model paths, availability checks, and explicit downloads."""
 
     def __init__(self, cache_dir: str | Path | None = None):
-        if cache_dir is None:
-            cache_dir = Path.home() / ".cache" / "voxlocal"
-        self.cache_dir = Path(cache_dir)
+        root = cache_dir or user_cache_dir("voxlocal")
+        self.cache_dir = Path(root).expanduser()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
     def is_downloaded(self, model_id: str) -> bool:
-        """Check if a model is already downloaded."""
-        model_dir = self.cache_dir / model_id
-        return model_dir.exists() and any(model_dir.iterdir())
+        """Return true only when required model files exist on disk."""
+        if model_id == "supertonic_3":
+            return self._all_exist(self.model_dir(model_id), SUPERTONIC_FILES)
+        if model_id == "whisper_base":
+            return (self.model_dir(model_id) / "base.pt").is_file()
+        if model_id == "sensevoice_onnx":
+            return self._all_exist(self.model_dir(model_id), SENSEVOICE_FILES)
+        if model_id == "moonshine_es":
+            return self._all_exist(self.model_dir(model_id), MOONSHINE_ES_FILES)
+        raise ValueError(f"Unknown model: {model_id}")
+
+    def require_downloaded(self, model_id: str) -> Path:
+        """Return the model directory or raise the public setup error."""
+        if not self.is_downloaded(model_id):
+            raise ModelNotDownloadedError(model_id)
+        return self.model_dir(model_id)
 
     def download(self, model_id: str) -> Iterator[DownloadProgress]:
-        """Download a model, yielding progress updates."""
+        """Download one known model with explicit start and completion records."""
         if self.is_downloaded(model_id):
-            yield DownloadProgress(
-                model_id=model_id,
-                percent=100,
-                downloaded="0MB",
-                total="0MB",
-                description=f"Model {model_id} already cached",
-            )
+            yield self._progress(model_id, 100, "already cached")
             return
 
-        # Placeholder: actual download logic per engine
-        # Each engine wrapper will implement its own download
-        yield DownloadProgress(
-            model_id=model_id,
-            percent=0,
-            downloaded="0MB",
-            total="0MB",
-            description=f"Download not implemented for {model_id}",
-        )
+        yield self._progress(model_id, 0, "download started")
+        try:
+            if model_id == "supertonic_3":
+                self._download_supertonic()
+            elif model_id == "whisper_base":
+                self._download_whisper()
+            elif model_id == "sensevoice_onnx":
+                self._download_sensevoice()
+            elif model_id == "moonshine_es":
+                self._download_moonshine()
+            else:
+                raise ValueError(f"Unknown model: {model_id}")
+        except (DependencyMissingError, ValueError):
+            raise
+        except Exception as error:
+            raise ModelDownloadError(
+                f"Failed to download model '{model_id}': {error}"
+            ) from error
+
+        if not self.is_downloaded(model_id):
+            raise ModelDownloadError(
+                f"Download for '{model_id}' completed without all required files"
+            )
+        yield self._progress(model_id, 100, "download complete")
+
+    def model_dir(self, model_id: str) -> Path:
+        """Return the engine-specific directory for a model."""
+        directories = {
+            "supertonic_3": self.cache_dir / "supertonic-3",
+            "whisper_base": self.cache_dir / "whisper",
+            "sensevoice_onnx": self.cache_dir / "sensevoice-onnx",
+            "moonshine_es": self.cache_dir / "moonshine",
+        }
+        try:
+            return directories[model_id]
+        except KeyError as error:
+            raise ValueError(f"Unknown model: {model_id}") from error
 
     def get_model_path(self, model_id: str) -> Path:
-        """Get path to cached model directory."""
-        return self.cache_dir / model_id
+        """Backward-compatible alias for model_dir()."""
+        return self.model_dir(model_id)
+
+    @staticmethod
+    def _all_exist(root: Path, relative_paths: tuple[str, ...]) -> bool:
+        return all((root / relative_path).is_file() for relative_path in relative_paths)
+
+    @staticmethod
+    def _progress(
+        model_id: str, percent: int, description: str
+    ) -> DownloadProgress:
+        return DownloadProgress(
+            model_id=model_id,
+            percent=percent,
+            downloaded="complete" if percent == 100 else "pending",
+            total="unknown",
+            description=f"{model_id}: {description}",
+        )
+
+    def _download_supertonic(self) -> None:
+        try:
+            from supertonic.loader import download_model
+        except ImportError as error:
+            raise DependencyMissingError("supertonic", "tts") from error
+
+        model_dir = self.model_dir("supertonic_3")
+        model_dir.parent.mkdir(parents=True, exist_ok=True)
+        download_model(model_dir, model_name="supertonic-3")
+
+    def _download_whisper(self) -> None:
+        try:
+            import whisper
+        except ImportError as error:
+            raise DependencyMissingError("openai-whisper", "whisper") from error
+
+        model = whisper.load_model(
+            "base", download_root=str(self.model_dir("whisper_base"))
+        )
+        del model
+
+    def _download_sensevoice(self) -> None:
+        try:
+            from huggingface_hub import snapshot_download
+        except ImportError as error:
+            raise DependencyMissingError("huggingface-hub", "sensevoice") from error
+
+        snapshot_download(
+            repo_id=SENSEVOICE_REPO,
+            revision=SENSEVOICE_REVISION,
+            local_dir=str(self.model_dir("sensevoice_onnx")),
+            allow_patterns=list(SENSEVOICE_FILES),
+        )
+
+    def _download_moonshine(self) -> None:
+        try:
+            from moonshine_voice import get_model_for_language
+        except ImportError as error:
+            raise DependencyMissingError("moonshine-voice", "moonshine") from error
+
+        get_model_for_language(
+            "es", cache_root=self.model_dir("moonshine_es")
+        )

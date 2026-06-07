@@ -1,43 +1,98 @@
 from __future__ import annotations
 
-MODEL_REGISTRY: dict[str, dict[str, dict[str, str | int]]] = {
+from dataclasses import dataclass
+
+from voxlocal._errors import EngineNotSupportedError, LanguageNotSupportedError
+
+
+@dataclass(frozen=True)
+class EngineConfig:
+    """Resolved engine and model selection for one capability."""
+
+    engine: str
+    model_id: str
+    size_mb: int
+
+    def __getitem__(self, key: str) -> str | int:
+        """Preserve the original mapping-style private API."""
+        return getattr(self, key)
+
+
+MODEL_REGISTRY: dict[str, dict[str, EngineConfig]] = {
     "stt": {
-        "es": {"engine": "moonshine", "model_id": "moonshine_es", "size_mb": 60},
-        "en": {"engine": "sensevoice", "model_id": "sensevoice_en", "size_mb": 230},
-        "ja": {"engine": "sensevoice", "model_id": "sensevoice_ja", "size_mb": 230},
-        "ko": {"engine": "sensevoice", "model_id": "sensevoice_ko", "size_mb": 230},
-        "fr": {"engine": "whisper", "model_id": "whisper_base", "size_mb": 139},
-        "de": {"engine": "whisper", "model_id": "whisper_base", "size_mb": 139},
-        "pt": {"engine": "whisper", "model_id": "whisper_base", "size_mb": 139},
-        "auto": {"engine": "whisper", "model_id": "whisper_base", "size_mb": 139},
+        "es": EngineConfig("moonshine", "moonshine_es", 60),
+        "en": EngineConfig("sensevoice", "sensevoice_onnx", 230),
+        "ja": EngineConfig("sensevoice", "sensevoice_onnx", 230),
+        "ko": EngineConfig("sensevoice", "sensevoice_onnx", 230),
+        "fr": EngineConfig("whisper", "whisper_base", 139),
+        "de": EngineConfig("whisper", "whisper_base", 139),
+        "pt": EngineConfig("whisper", "whisper_base", 139),
+        "auto": EngineConfig("whisper", "whisper_base", 139),
     },
     "tts": {
-        "es": {"engine": "supertonic", "model_id": "supertonic_es", "size_mb": 99},
-        "en": {"engine": "supertonic", "model_id": "supertonic_en", "size_mb": 99},
-        "ja": {"engine": "supertonic", "model_id": "supertonic_ja", "size_mb": 99},
-        "ko": {"engine": "supertonic", "model_id": "supertonic_ko", "size_mb": 99},
-        "fr": {"engine": "supertonic", "model_id": "supertonic_fr", "size_mb": 99},
-        "de": {"engine": "supertonic", "model_id": "supertonic_de", "size_mb": 99},
-        "pt": {"engine": "supertonic", "model_id": "supertonic_pt", "size_mb": 99},
+        "es": EngineConfig("supertonic", "supertonic_3", 99),
+        "en": EngineConfig("supertonic", "supertonic_3", 99),
+        "ja": EngineConfig("supertonic", "supertonic_3", 99),
+        "ko": EngineConfig("supertonic", "supertonic_3", 99),
+        "fr": EngineConfig("supertonic", "supertonic_3", 99),
+        "de": EngineConfig("supertonic", "supertonic_3", 99),
+        "pt": EngineConfig("supertonic", "supertonic_3", 99),
     },
 }
 
+ENGINE_MODELS: dict[str, dict[str, dict[str, EngineConfig]]] = {
+    "stt": {
+        "whisper": {
+            language: EngineConfig("whisper", "whisper_base", 139)
+            for language in MODEL_REGISTRY["stt"]
+        },
+        "moonshine": {
+            "es": EngineConfig("moonshine", "moonshine_es", 60),
+        },
+        "sensevoice": {
+            language: EngineConfig("sensevoice", "sensevoice_onnx", 230)
+            for language in ("en", "ja", "ko")
+        },
+    },
+    "tts": {
+        "supertonic": {
+            language: EngineConfig("supertonic", "supertonic_3", 99)
+            for language in MODEL_REGISTRY["tts"]
+        }
+    },
+}
+
+SUPPORTED_STT_LANGUAGES = tuple(sorted(MODEL_REGISTRY["stt"]))
+SUPPORTED_TTS_LANGUAGES = tuple(sorted(MODEL_REGISTRY["tts"]))
 SUPPORTED_LANGUAGES = sorted(
     set(MODEL_REGISTRY["stt"].keys()) | set(MODEL_REGISTRY["tts"].keys())
 )
 
 
-def get_stt_config(language: str) -> dict:
-    if language not in MODEL_REGISTRY["stt"]:
-        from voxlocal._errors import LanguageNotSupportedError
+def _get_config(
+    capability: str, language: str, engine: str | None
+) -> EngineConfig:
+    if engine is None:
+        try:
+            return MODEL_REGISTRY[capability][language]
+        except KeyError as error:
+            raise LanguageNotSupportedError(language, capability) from error
 
-        raise LanguageNotSupportedError(language)
-    return MODEL_REGISTRY["stt"][language]
+    try:
+        language_models = ENGINE_MODELS[capability][engine]
+    except KeyError as error:
+        raise EngineNotSupportedError(capability, engine, language) from error
+    try:
+        return language_models[language]
+    except KeyError as error:
+        raise EngineNotSupportedError(capability, engine, language) from error
 
 
-def get_tts_config(language: str) -> dict:
-    if language not in MODEL_REGISTRY["tts"]:
-        from voxlocal._errors import LanguageNotSupportedError
+def get_stt_config(language: str, engine: str | None = None) -> EngineConfig:
+    """Resolve STT configuration, including explicit engine overrides."""
+    return _get_config("stt", language, engine)
 
-        raise LanguageNotSupportedError(language)
-    return MODEL_REGISTRY["tts"][language]
+
+def get_tts_config(language: str, engine: str | None = None) -> EngineConfig:
+    """Resolve TTS configuration, including explicit engine overrides."""
+    return _get_config("tts", language, engine)

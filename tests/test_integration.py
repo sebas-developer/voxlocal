@@ -1,6 +1,4 @@
-# tests/test_integration.py
-import pytest
-from voxlocal import VoxLocal, SUPPORTED_LANGUAGES
+from voxlocal import SUPPORTED_LANGUAGES
 
 
 def test_supported_languages_not_empty():
@@ -22,14 +20,19 @@ def test_all_tts_languages_in_supported():
 
 
 def test_download_manager_cache_dir():
+    import tempfile
+    from pathlib import Path
+
     from voxlocal._download import DownloadManager
 
-    dm = DownloadManager()
-    assert dm.cache_dir.exists()
+    with tempfile.TemporaryDirectory() as directory:
+        manager = DownloadManager(directory)
+        assert manager.cache_dir == Path(directory)
 
 
 def test_audio_result_roundtrip():
     import numpy as np
+
     from voxlocal._audio import AudioResult
 
     data = np.random.randn(16000).astype(np.float32)

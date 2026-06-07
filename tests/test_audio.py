@@ -1,7 +1,9 @@
-import numpy as np
 import os
 import tempfile
-from voxlocal._audio import AudioResult
+
+import numpy as np
+
+from voxlocal._audio import AudioChunk, AudioResult
 
 
 def test_audio_result_properties():
@@ -31,3 +33,25 @@ def test_audio_result_save():
         assert os.path.getsize(path) > 0
     finally:
         os.unlink(path)
+
+
+def test_audio_result_rejects_multichannel_data():
+    with np.testing.assert_raises(ValueError):
+        AudioResult(np.zeros((2, 20), dtype=np.float32), 16000)
+
+
+def test_audio_chunk_wire_format_is_portable():
+    chunk = AudioChunk(
+        sequence=2,
+        numpy=np.array([-1.0, 0.0, 1.0], dtype=np.float32),
+        sample_rate=16000,
+        final=True,
+    )
+
+    wire = chunk.to_wire_dict()
+
+    assert wire["encoding"] == "pcm_s16le"
+    assert wire["channels"] == 1
+    assert wire["sample_rate"] == 16000
+    assert wire["final"] is True
+    assert isinstance(wire["audio_base64"], str)

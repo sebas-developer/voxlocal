@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import numpy as np
 import kaldi_native_fbank as knf
+import numpy as np
 
 
 def extract_features(waveform: np.ndarray, cmvn_file: str) -> np.ndarray:

@@ -1,11 +1,15 @@
 # tests/test_errors.py
 import pytest
+
 from voxlocal import (
-    VoxLocalError,
+    DependencyMissingError,
+    EngineNotSupportedError,
     LanguageNotSupportedError,
+    ModelDownloadError,
     ModelNotDownloadedError,
-    TranscriptionError,
     SynthesisError,
+    TranscriptionError,
+    VoxLocalError,
 )
 
 
@@ -25,6 +29,15 @@ def test_model_not_downloaded():
 
 def test_errors_are_voxlocal_error():
     assert issubclass(LanguageNotSupportedError, VoxLocalError)
+    assert issubclass(EngineNotSupportedError, VoxLocalError)
     assert issubclass(ModelNotDownloadedError, VoxLocalError)
+    assert issubclass(ModelDownloadError, VoxLocalError)
+    assert issubclass(DependencyMissingError, VoxLocalError)
     assert issubclass(TranscriptionError, VoxLocalError)
     assert issubclass(SynthesisError, VoxLocalError)
+
+
+def test_missing_dependency_names_install_extra():
+    error = DependencyMissingError("sounddevice", "playback")
+
+    assert "voxlocal[playback]" in str(error)
