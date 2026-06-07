@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function HomePage() {
   return (
     <main className="min-h-screen">
@@ -34,7 +36,7 @@ export default function HomePage() {
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <a
+            <Link
               href="/docs"
               className="inline-flex items-center gap-2 px-8 py-3.5 border-2 border-primary bg-primary text-primary-foreground font-bold text-base hover:bg-primary/90 transition-all"
             >
@@ -42,13 +44,13 @@ export default function HomePage() {
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
               </svg>
-            </a>
-            <a
+            </Link>
+            <Link
               href="/docs/quickstart"
               className="inline-flex items-center gap-2 px-8 py-3.5 border-2 border-border bg-background font-bold text-base hover:bg-accent transition-all"
             >
               Quickstart
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -138,7 +140,7 @@ result = v.<span className="text-blue-500 dark:text-blue-400">transcribe</span>(
           Join the growing community of developers who believe speech AI
           should be free. As in freedom. Also free as in money.
         </p>
-        <a
+        <Link
           href="/docs"
           className="inline-flex items-center gap-2 px-10 py-4 border-2 border-primary bg-primary text-primary-foreground font-bold text-lg hover:bg-primary/90 transition-all"
         >
@@ -146,7 +148,7 @@ result = v.<span className="text-blue-500 dark:text-blue-400">transcribe</span>(
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
           </svg>
-        </a>
+        </Link>
         <p className="text-xs text-muted-foreground/40 mt-6">
           No credit card required. No email signup. No tracking pixels. We're not your ex.
         </p>

@@ -6,6 +6,7 @@ const withMDX = createMDX();
 const nextConfig = {
   output: 'export',
   basePath: '/voxlocal',
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },
