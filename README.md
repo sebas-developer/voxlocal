@@ -91,31 +91,43 @@ for item in voice.setup_iter(stt=False):
 Models are stored under the platform user cache directory. Pass `cache_dir=` to
 `VoxLocal` for an explicit location.
 
-## HTTP And TypeScript
+## Clients
 
-Run the optional transport:
+VoxLocal exposes an HTTP API. Run the server, then use any client library.
+
+### Start the server
 
 ```bash
 pip install "voxlocal[tts,server]"
-# Add Whisper for the language=auto STT endpoint:
-pip install "voxlocal[tts,whisper,server]"
 voxlocal-server --host 127.0.0.1 --port 8765
 ```
 
-For a browser frontend on another origin, explicitly allow it:
+For browser frontends on another origin:
 
 ```bash
 voxlocal-server --cors-origin http://localhost:3000
 ```
 
-The endpoints are:
+### Python
 
-- `POST /v1/stt?language=auto`: accepts an `audio/wav` body and returns JSON
-- `POST /v1/tts`: returns `audio/wav`
-- `POST /v1/tts/stream`: returns newline-delimited JSON with base64 PCM16 chunks
-- `GET /v1/health`: health check
+```bash
+pip install "voxlocal[tts,playback]"
+```
 
-The TypeScript client is in [`clients/typescript`](clients/typescript):
+```python
+from voxlocal import VoxLocal
+from voxlocal.playback import play
+
+voice = VoxLocal(language="es")
+voice.setup(stt=False, tts=True)
+play(voice.stream("Hola mundo"))
+```
+
+### TypeScript
+
+```bash
+npm install @voxlocal/client
+```
 
 ```ts
 import { stream, decodePcm16, transcribe } from "@voxlocal/client";
@@ -133,6 +145,38 @@ for await (const chunk of stream("http://127.0.0.1:8765", {
   console.log(chunk.sequence, pcm.length, chunk.final);
 }
 ```
+
+### Swift (iOS / macOS)
+
+Add to your `Package.swift`:
+
+```swift
+.package(url: "https://github.com/sebas-developer/voxlocal.git", from: "0.1.0")
+```
+
+```swift
+import VoxLocalClient
+
+let client = try VoxLocalClient(baseUrl: "http://127.0.0.1:8765")
+
+// Streaming TTS
+for try await chunk in client.stream(text: "Hola mundo", language: "es") {
+    let pcm = chunk.decodePCM16()
+    // Play audio...
+}
+
+// Transcription
+let text = try await client.transcribe(audio: wavData, language: "auto")
+```
+
+### API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/v1/tts` | Returns `audio/wav` |
+| `POST` | `/v1/tts/stream` | Returns NDJSON with base64 PCM16 chunks |
+| `POST` | `/v1/stt?language=auto` | Accepts `audio/wav`, returns JSON |
+| `GET` | `/v1/health` | Health check |
 
 See [`docs/transport.md`](docs/transport.md) for the language-neutral contract.
 
