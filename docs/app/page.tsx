@@ -165,6 +165,15 @@ result = v.<span className="text-blue-500 dark:text-blue-400">transcribe</span>(
         >
           Fumadocs
         </a>
+        {' '}&middot;{' '}
+        <a
+          href="https://github.com/sebas-developer/voxlocal"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="underline hover:text-foreground transition-colors"
+        >
+          GitHub
+        </a>
         {' '}&middot; VoxLocal &copy; {new Date().getFullYear()}
       </footer>
     </main>
