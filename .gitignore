@@ -15,6 +15,7 @@ sensevoice_onnx_models/
 docs/superpowers/
 clients/typescript/dist/
 clients/typescript/node_modules/
+clients/swift/.build/
 /demo.py
 /test_sensevoice.py
 /test_tts.py
