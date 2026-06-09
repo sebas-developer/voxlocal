@@ -41,6 +41,7 @@ playback = [
 ]
 whisper = [
     "openai-whisper>=20250625",
+    "torch>=2.0",
 ]
 moonshine = [
     "moonshine-voice>=0.0.62,<0.1",
