@@ -1,0 +1,177 @@
+---
+title: Voice Agent
+description: Build a local voice assistant with VoxLocal STT/TTS and OpenCode LLM
+---
+
+A complete voice assistant that runs locally: speak into your mic, get a response from an LLM, hear it spoken back. No cloud APIs needed.
+
+## Prerequisites
+
+- **Python 3.10–3.13** (3.14 breaks webrtcvad/pkg_resources)
+- **OpenCode CLI** installed and available on PATH
+- **macOS** with microphone access (portaudio via Homebrew)
+
+## One-Command Setup
+
+```bash
+cd /path/to/your/project
+./setup_voice_agent.sh
+```
+
+Or install manually:
+
+```bash
+pip install 'voxlocal[tts,sensevoice,playback]' webrtcvad pyaudio requests
+```
+
+This script handles everything:
+
+| Step | What it does |
+|------|-------------|
+| Python detection | Finds python3.13, falls back to python3 |
+| Version check | Rejects Python 3.14+ (webrtcvad incompatible) |
+| portaudio | Installs via Homebrew if missing |
+| Virtual env | Creates `.venv/` if it doesn't exist |
+| Dependencies | Installs all 12 packages from requirements-voice-agent.txt |
+| VoxLocal models | Downloads SenseVoice (STT) + Supertonic (TTS) |
+
+## Run
+
+```bash
+source .venv/bin/activate
+python3 voice_agent.py
+```
+
+### Check Dependencies Only
+
+```bash
+python3 voice_agent.py --check
+```
+
+Verifies all imports, VoxLocal model setup, and opencode availability without starting the agent.
+
+## How It Works
+
+```
+┌─────────────┐     ┌──────────┐     ┌─────────────┐     ┌──────────┐
+│  Push-to-    │────▶│ VoxLocal │────▶│   OpenCode   │────▶│ VoxLocal │
+│  Talk (Mic)  │     │   STT    │     │  HTTP API    │     │   TTS    │
+└─────────────┘     └──────────┘     └─────────────┘     └──────────┘
+     ENTER              SenseVoice      LLM response       Supertonic
+     to start                            (HTTP)             streaming
+     to stop
+```
+
+1. Press **ENTER** to start recording
+2. Speak your question
+3. Press **ENTER** again to stop
+4. VoxLocal transcribes your speech (SenseVoice)
+5. Text is sent to OpenCode's local HTTP API
+6. LLM response is spoken back through your speakers (Supertonic)
+
+## Architecture
+
+| Component | Class | Purpose |
+|-----------|-------|---------|
+| `OpenCodeServer` | Manages server lifecycle | Starts `opencode serve`, creates sessions, sends chat messages via HTTP |
+| `PushToTalkRecorder` | Mic recording | Uses PyAudio to capture audio, Enter key to toggle recording |
+| `VoicePipeline` | STT + TTS | Wraps VoxLocal for transcription and speech synthesis |
+
+### Echo Gate
+
+A `threading.Event` prevents the AI from hearing its own speech output. When TTS is playing, incoming mic audio is discarded automatically.
+
+## System Prompt
+
+The agent uses a system prompt optimized for voice:
+
+```
+You are a helpful voice assistant.
+Keep ALL responses to 1-2 sentences maximum.
+Be conversational and natural.
+Never use markdown, bullet points, or formatting.
+Just plain spoken English.
+```
+
+Edit `SYSTEM_PROMPT` in `voice_agent.py` to customize.
+
+## Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| voxlocal[tts,sensevoice,playback] | Core library with STT, TTS, and playback |
+| webrtcvad | Voice activity detection |
+| pyaudio | Microphone capture |
+| requests | HTTP client for OpenCode API |
+| setuptools | pkg_resources (webrtcvad dependency) |
+
+## Troubleshooting
+
+### "Missing voice-agent dependencies"
+
+Install the required packages:
+
+```bash
+pip install 'voxlocal[tts,sensevoice,playback]' webrtcvad pyaudio requests
+```
+
+Or run the setup script:
+
+```bash
+./setup_voice_agent.sh
+```
+
+### "OpenCode server failed to start"
+
+Ensure `opencode` is installed and on PATH:
+
+```bash
+which opencode
+```
+
+### "No audio input"
+
+Check microphone permissions in System Settings > Privacy > Microphone.
+
+### TTS not playing
+
+Verify portaudio and sounddevice:
+
+```bash
+python3 -c "import sounddevice; print(sounddevice.query_devices())"
+```
+
+### Python 3.14 errors
+
+Use Python 3.13 or earlier. The setup script auto-detects the right version.
+
+## Customization
+
+### Change LLM Port
+
+```python
+OPENCODE_PORT = 4096  # Edit in voice_agent.py
+```
+
+### Change Language
+
+```python
+voice = VoicePipeline(language="es")  # Spanish
+```
+
+### Adjust Recording Behavior
+
+Edit `voice_agent.py`:
+
+```python
+SILENCE_DURATION_MS = 700  # How long to wait after speech stops
+VAD_AGGRESSIVENESS = 2     # 0-3, higher = more aggressive filtering
+SAMPLE_RATE = 16000        # Mic sample rate
+```
+
+## Next Steps
+
+- [STT Guide](/docs/guides/stt) — Deep dive into speech-to-text
+- [TTS Guide](/docs/guides/tts) — Deep dive into text-to-speech
+- [Streaming Guide](/docs/guides/streaming) — Real-time audio streaming
+- [FastAPI Server Example](/docs/examples/fastapi-server) — Deploy as a REST API

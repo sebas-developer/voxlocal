@@ -54,6 +54,7 @@ sensevoice = [
 ]
 server = [
     "fastapi>=0.115,<1",
+    "pydantic>=2,<3",
     "uvicorn>=0.30,<1",
 ]
 all = [
@@ -63,6 +64,7 @@ all = [
     "moonshine-voice>=0.0.62,<0.1",
     "onnxruntime>=1.18,<2",
     "openai-whisper>=20250625",
+    "pydantic>=2,<3",
     "scipy>=1.10,<2",
     "sentencepiece>=0.2,<1",
     "sounddevice>=0.5,<1",
@@ -72,6 +74,10 @@ all = [
 dev = [
     "build>=1.2,<2",
     "fastapi>=0.115,<1",
+    "httpx>=0.27,<1",
+    "mypy>=1.14,<2",
+    "pre-commit>=4,<5",
+    "pydantic>=2,<3",
     "pytest>=8,<10",
     "ruff>=0.11,<1",
     "uvicorn>=0.30,<1",
@@ -82,6 +88,19 @@ voxlocal-server = "voxlocal.server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["voxlocal"]
+include = [
+    "voxlocal/py.typed",
+]
+exclude = [
+    "tests/",
+    "docs/",
+    "clients/",
+    "demo.py",
+    "test_sensevoice.py",
+    "test_tts.py",
+    "transcribe.py",
+    "*.wav",
+]
 
 [tool.hatch.version]
 path = "voxlocal/_version.py"
@@ -94,4 +113,40 @@ target-version = "py310"
 line-length = 88
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B"]
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "I",     # isort
+    "UP",    # pyupgrade
+    "B",     # flake8-bugbear
+    "S",     # flake8-bandit (security)
+    "A",     # flake8-builtins
+    "C4",    # flake8-comprehensions
+    "SIM",   # flake8-simplify
+    "TCH",   # flake8-type-checking
+    "T20",   # flake8-print
+    "PT",    # flake8-pytest-style
+    "RUF",   # ruff-specific
+]
+ignore = [
+    "T201",   # allow print() in demo/scripts
+    "S101",   # allow assert in tests
+    "TC001",  # skip: imports used at runtime despite annotations
+    "TC003",  # skip: stdlib imports fine at runtime
+    "RUF001", # intentional CJK characters in regex patterns
+]
+
+[tool.ruff.lint.per-file-ignores]
+"demo.py" = ["T201"]
+"tests/**" = ["S101", "T201", "S108", "TC002"]
+"test_*.py" = ["S101", "T201", "S108", "TC002"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = false
+check_untyped_defs = true
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true

@@ -1,12 +1,17 @@
+# SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import logging
 import re
 from collections.abc import Iterator
 from pathlib import Path
 from threading import Lock
+from typing import Literal
 
 from voxlocal._audio import AudioResult
 from voxlocal._errors import DependencyMissingError
+
+logger = logging.getLogger("voxlocal.tts.supertonic")
 
 DIRECT_STEPS = 8
 STREAMING_STEPS = 6
@@ -14,6 +19,8 @@ PROGRESSIVE_WORD_LIMITS = (3, 5, 8, 12, 16)
 PROGRESSIVE_CJK_LIMITS = (8, 12, 20, 28, 36)
 SENTENCE_GROUPS = (1, 1, 2)
 CJK_LANGUAGES = frozenset({"ja", "zh"})
+
+ChunkBy = Literal["progressive", "sentence", "line", "paragraph"]
 
 
 def _split_sentences(text: str) -> list[str]:
@@ -25,8 +32,19 @@ def _split_sentences(text: str) -> list[str]:
     return [sentence.strip() for sentence in sentences if sentence.strip()]
 
 
-def _split_text(text: str, chunk_by: str) -> list[str]:
-    """Split text by an explicit supported strategy."""
+def _split_text(text: str, chunk_by: ChunkBy | str) -> list[str]:
+    """Split text by an explicit supported strategy.
+
+    Args:
+        text: Input text to split.
+        chunk_by: One of 'progressive', 'sentence', 'line', or 'paragraph'.
+
+    Returns:
+        List of non-empty text chunks.
+
+    Raises:
+        ValueError: If chunk_by is not a recognized strategy.
+    """
     if chunk_by == "sentence":
         parts = _split_sentences(text)
     elif chunk_by == "line":
@@ -107,19 +125,29 @@ def _split_progressive(text: str, language: str = "en") -> list[str]:
 
 
 class SupertonicTTS:
-    """Supertonic TTS engine with separate direct and streaming quality."""
+    """Supertonic TTS engine with separate direct and streaming quality.
 
-    def __init__(
-        self, language: str = "en", model_dir: str | Path | None = None
-    ):
+    Thread-safe: synthesis and model loading are protected by locks.
+
+    Args:
+        language: ISO 639-1 language code.
+        model_dir: Path to the Supertonic model directory.
+    """
+
+    def __init__(self, language: str = "en", model_dir: str | Path | None = None):
         self.language = language
         self.model_dir = Path(model_dir).expanduser() if model_dir else None
-        self._tts = None
-        self._style = None
+        self._tts: object = None
+        self._style: object = None
         self._synthesis_lock = Lock()
+        self._model_lock = Lock()
 
     def _ensure_model(self) -> None:
-        if self._tts is None:
+        if self._tts is not None:
+            return
+        with self._model_lock:
+            if self._tts is not None:
+                return
             try:
                 from supertonic import TTS
             except ImportError as error:
@@ -127,28 +155,34 @@ class SupertonicTTS:
 
             if self.model_dir is None:
                 raise RuntimeError("Supertonic model_dir is required")
+            logger.debug("Loading Supertonic model...")
             self._tts = TTS(
                 model="supertonic-3",
                 model_dir=self.model_dir,
                 auto_download=False,
             )
-            self._style = self._tts.get_voice_style(voice_name="M1")
+            self._style = self._tts.get_voice_style(voice_name="M1")  # type: ignore[attr-defined]
+            logger.info("Supertonic model loaded for language=%s", self.language)
 
     def warmup(self) -> None:
         """Pre-initialize Supertonic model resources."""
         self._ensure_model()
+        logger.debug("Supertonic warmup complete")
 
     @property
     def sample_rate(self) -> int:
         self._ensure_model()
-        return self._tts.sample_rate
+        assert self._tts is not None
+        return int(self._tts.sample_rate)  # type: ignore[attr-defined]
 
     def _synthesize(self, text: str, steps: int) -> AudioResult:
         if not text.strip():
             raise ValueError("text must not be empty")
         self._ensure_model()
+        assert self._tts is not None
+        assert self._style is not None
         with self._synthesis_lock:
-            wav, _duration = self._tts.synthesize(
+            wav, _duration = self._tts.synthesize(  # type: ignore[attr-defined]
                 text=text,
                 lang=self.language,
                 voice_style=self._style,
@@ -156,10 +190,20 @@ class SupertonicTTS:
                 speed=1.0,
                 silence_duration=0,
             )
-        return AudioResult(numpy=wav, sample_rate=self._tts.sample_rate)
+        return AudioResult(numpy=wav, sample_rate=int(self._tts.sample_rate))  # type: ignore[attr-defined]
 
     def speak(self, text: str) -> AudioResult:
-        """Generate one complete result at the higher-quality direct setting."""
+        """Generate one complete result at the higher-quality direct setting.
+
+        Args:
+            text: Text to synthesize.
+
+        Returns:
+            Complete audio result.
+
+        Raises:
+            ValueError: If text is empty.
+        """
         return self._synthesize(text, steps=DIRECT_STEPS)
 
     def speak_iter(
@@ -167,7 +211,19 @@ class SupertonicTTS:
         text: str,
         chunk_by: str = "progressive",
     ) -> Iterator[AudioResult]:
-        """Yield raw generated chunks at the lower-latency streaming setting."""
+        """Yield raw generated chunks at the lower-latency streaming setting.
+
+        Args:
+            text: Text to synthesize.
+            chunk_by: Chunking strategy — 'progressive', 'sentence', 'line',
+                or 'paragraph'.
+
+        Yields:
+            AudioResult for each text chunk.
+
+        Raises:
+            ValueError: If text is empty or chunk_by is invalid.
+        """
         chunks = (
             _split_progressive(text, self.language)
             if chunk_by == "progressive"
@@ -175,5 +231,6 @@ class SupertonicTTS:
         )
         if not chunks:
             raise ValueError("text must not be empty")
+        logger.debug("Synthesizing %d chunks via '%s' strategy", len(chunks), chunk_by)
         for chunk in chunks:
             yield self._synthesize(chunk, steps=STREAMING_STEPS)

@@ -2,14 +2,15 @@
   "name": "@voxlocal/client",
   "version": "0.1.0",
   "description": "TypeScript client for the VoxLocal HTTP streaming API",
-  "type": "module",
   "license": "MIT",
-  "main": "./dist/index.js",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "sideEffects": false,
@@ -17,7 +18,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json"
   },
   "devDependencies": {
     "typescript": "^5.8.0"

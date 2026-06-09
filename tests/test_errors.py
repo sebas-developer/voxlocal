@@ -1,4 +1,5 @@
-# tests/test_errors.py
+# SPDX-License-Identifier: MIT
+
 import pytest
 
 from voxlocal import (

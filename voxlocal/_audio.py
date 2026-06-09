@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 from __future__ import annotations
 
 import base64
@@ -28,7 +29,15 @@ def _pcm_s16le(audio: np.ndarray) -> bytes:
 
 @dataclass(frozen=True)
 class AudioResult:
-    """Result of TTS synthesis."""
+    """Result of TTS synthesis.
+
+    Attributes:
+        numpy: Mono float32 numpy array of audio samples.
+        sample_rate: Audio sample rate in Hz.
+
+    Raises:
+        ValueError: If sample_rate is not positive or audio is not mono.
+    """
 
     numpy: np.ndarray
     sample_rate: int
@@ -51,7 +60,7 @@ class AudioResult:
         return buf.getvalue()
 
     @property
-    def pcm_s16le(self) -> bytes:
+    def pcm_s16le(self) -> bytes:  # type: ignore[valid-type]
         """Raw mono signed 16-bit little-endian PCM."""
         return _pcm_s16le(self.numpy)
 
@@ -62,7 +71,19 @@ class AudioResult:
 
 @dataclass(frozen=True)
 class AudioChunk:
-    """Portable streaming audio block independent of playback libraries."""
+    """Portable streaming audio block independent of playback libraries.
+
+    Attributes:
+        sequence: Monotonically increasing chunk index.
+        numpy: Mono float32 numpy array of audio samples.
+        sample_rate: Audio sample rate in Hz.
+        final: True if this is the last chunk in the stream.
+        source_chunk: Index of the source chunk that produced this block.
+
+    Raises:
+        ValueError: If sequence is negative, sample_rate is not positive,
+            or audio is not mono.
+    """
 
     sequence: int
     numpy: np.ndarray
@@ -99,3 +120,9 @@ class AudioChunk:
             "source_chunk": self.source_chunk,
             "audio_base64": base64.b64encode(self.pcm_s16le).decode("ascii"),
         }
+
+
+__all__ = [
+    "AudioChunk",
+    "AudioResult",
+]

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+from __future__ import annotations
+
 from voxlocal import SUPPORTED_LANGUAGES
 
 

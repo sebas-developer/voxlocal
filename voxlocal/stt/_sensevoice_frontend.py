@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 from __future__ import annotations
 
 import kaldi_native_fbank as knf
@@ -28,7 +29,7 @@ def extract_features(waveform: np.ndarray, cmvn_file: str) -> np.ndarray:
     T, dim = mat.shape
     m = np.tile(cmvn[0:1, :dim], (T, 1))
     v = np.tile(cmvn[1:2, :dim], (T, 1))
-    return (mat + m) * v
+    return (mat + m) * v  # type: ignore[no-any-return]
 
 
 def _load_cmvn(cmvn_file: str) -> np.ndarray:

@@ -1,3 +1,6 @@
+# SPDX-License-Identifier: MIT
+from __future__ import annotations
+
 from voxlocal.stt._sensevoice import SenseVoiceSTT, _clean_transcript
 
 

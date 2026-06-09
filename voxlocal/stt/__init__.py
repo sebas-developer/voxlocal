@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: MIT
 from __future__ import annotations
 
 from pathlib import Path
@@ -5,10 +6,21 @@ from typing import Protocol
 
 
 class STTEngine(Protocol):
-    """Protocol for STT engines."""
+    """Protocol for speech-to-text engines.
+
+    All STT engines must implement this interface to be compatible with
+    the VoxLocal facade.
+    """
 
     def transcribe(self, audio_path: str) -> str:
-        """Transcribe audio file to text."""
+        """Transcribe audio file to text.
+
+        Args:
+            audio_path: Path to an audio file.
+
+        Returns:
+            Transcribed text.
+        """
         ...
 
     def warmup(self) -> None:
@@ -16,10 +28,20 @@ class STTEngine(Protocol):
         ...
 
 
-def resolve_stt_engine(
-    engine_name: str, language: str, model_dir: Path
-) -> STTEngine:
-    """Resolve STT engine by name."""
+def resolve_stt_engine(engine_name: str, language: str, model_dir: Path) -> STTEngine:
+    """Resolve STT engine by name.
+
+    Args:
+        engine_name: Engine identifier (e.g. 'whisper', 'moonshine').
+        language: ISO 639-1 language code.
+        model_dir: Path to the model directory.
+
+    Returns:
+        Configured STT engine instance.
+
+    Raises:
+        ValueError: If engine_name is not recognized.
+    """
     if engine_name == "whisper":
         from voxlocal.stt._whisper import WhisperSTT
 

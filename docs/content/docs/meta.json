@@ -15,6 +15,7 @@
     "guides/streaming",
     "guides/playback",
     "guides/custom-engine",
+    "guides/voice-agent",
     "---API Reference---",
     "api/voxlocal",
     "api/server",

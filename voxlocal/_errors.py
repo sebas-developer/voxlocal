@@ -1,8 +1,16 @@
+# SPDX-License-Identifier: MIT
+
 class VoxLocalError(Exception):
-    """Base exception for VoxLocal."""
+    """Base exception for VoxLocal.
+
+    All VoxLocal exceptions inherit from this class, allowing consumers to
+    catch any library error with a single except clause.
+    """
 
 
 class LanguageNotSupportedError(VoxLocalError):
+    """Raised when the requested language is not available."""
+
     def __init__(self, language: str, capability: str | None = None):
         self.language = language
         self.capability = capability
@@ -24,6 +32,8 @@ class EngineNotSupportedError(VoxLocalError):
 
 
 class ModelNotDownloadedError(VoxLocalError):
+    """Raised when a required model has not been downloaded."""
+
     def __init__(self, model_id: str, message: str | None = None):
         self.model_id = model_id
         self.message = (
@@ -35,7 +45,7 @@ class ModelNotDownloadedError(VoxLocalError):
 
 
 class ModelDownloadError(VoxLocalError):
-    """Raised when model setup fails."""
+    """Raised when model download or setup fails."""
 
 
 class DependencyMissingError(VoxLocalError):
@@ -51,8 +61,20 @@ class DependencyMissingError(VoxLocalError):
 
 
 class TranscriptionError(VoxLocalError):
-    """Error during transcription."""
+    """Error during speech-to-text transcription."""
 
 
 class SynthesisError(VoxLocalError):
-    """Error during synthesis."""
+    """Error during text-to-speech synthesis."""
+
+
+__all__ = [
+    "DependencyMissingError",
+    "EngineNotSupportedError",
+    "LanguageNotSupportedError",
+    "ModelDownloadError",
+    "ModelNotDownloadedError",
+    "SynthesisError",
+    "TranscriptionError",
+    "VoxLocalError",
+]
