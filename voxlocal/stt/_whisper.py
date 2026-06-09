@@ -84,9 +84,5 @@ class WhisperSTT:
         result = self._model.transcribe(  # type: ignore[attr-defined]
             audio_path,
             language=self.language if self.language != "auto" else None,
-            beam_size=5,
-            best_of=5,
-            temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
-            condition_on_previous_text=True,
         )
         return str(result["text"]).strip()
